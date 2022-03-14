@@ -38,7 +38,7 @@ end
 local OpChars = charsOfKeys(Operators)
 
 local Grammar = LUT {
-	":", ";", ",", "...", "(", ")", "[", "]", "{", "}",
+	":", ";", ",", "...", "(", ")", "[", "]", "{", "}", "."
 }
 
 return {

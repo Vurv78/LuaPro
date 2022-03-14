@@ -1,6 +1,9 @@
 local NODE_KINDS = require("compiler/parser").Kinds
+local TOKEN_KINDS = require("compiler/lexer").Kinds
 
 ---@class Transpiler
+---@field nodes table<integer, Node>
+---@field current integer
 local Transpiler = {}
 Transpiler.__index = Transpiler
 
@@ -8,9 +11,27 @@ function Transpiler.new()
 	return setmetatable({}, Transpiler)
 end
 
+---@return Node?
+function Transpiler:peek()
+	return self.nodes[self.current + 1]
+end
+
 local fmt = string.format
 
 local Transpilers = {
+	---@param self Transpiler
+	---@param data table
+	[NODE_KINDS.Comment] = function(self, data)
+		local multiline, inner, depth = data[1], data[2], data[3]
+
+		if multiline then
+			local equals = string.rep("=", depth)
+			return fmt("--[%s[%s]%s]", equals, inner, equals)
+		else
+			return "-- " .. inner
+		end
+	end,
+
 	---@param self Transpiler
 	---@param data table
 	[NODE_KINDS.While] = function(self, data)
@@ -21,9 +42,62 @@ local Transpilers = {
 
 	---@param self Transpiler
 	---@param data table
+	[NODE_KINDS.If] = function(self, data)
+		local cond, block = data[1], data[2]
+
+		local next = self:peek()
+		if next and (next.kind == NODE_KINDS.Else or next.kind == NODE_KINDS.Elseif) then
+			return fmt("if %s then %s", self:transpile(cond), self:transpileAst(block))
+		end
+
+		return fmt("if %s then\n%s\nend", self:transpile(cond), self:transpileAst(block))
+	end,
+
+	---@param self Transpiler
+	---@param data table
+	[NODE_KINDS.Elseif] = function(self, data)
+		local cond, block = data[1], data[2]
+
+		local next = self:peek()
+		if next and (next.kind == NODE_KINDS.Else or next.kind == NODE_KINDS.Elseif) then
+			return fmt("elseif %s then %s", self:transpile(cond), self:transpileAst(block))
+		end
+
+		return fmt("elseif %s then\n%s\nend", self:transpile(cond), self:transpileAst(block))
+	end,
+
+	---@param self Transpiler
+	---@param data table
+	[NODE_KINDS.Else] = function(self, data)
+		local block = data[1]
+		return fmt("else\n%s\nend", self:transpileAst(block))
+	end,
+
+	---@param self Transpiler
+	---@param data table
+	[NODE_KINDS.For] = function(self, data)
+		local var, start, ed, step = data[1], data[2], data[3], data[4]
+		local body = self:transpileAst( data[5], true )
+
+		if step then
+			return fmt("for %s = %s, %s, %s do\n%s\nend", var, self:transpile(start), self:transpile(ed), self:transpile(step), body)
+		else
+			return fmt("for %s = %s, %s do\n%s\nend", var, self:transpile(start), self:transpile(ed), body)
+		end
+	end,
+
+	---@param self Transpiler
+	---@param data table
 	[NODE_KINDS.Function] = function(self, data)
-		local name, args, block = data[1], data[2], data[3]
-		return fmt("function %s(%s)\n\t%s\nend", name, table.concat(args, ", "), self:transpileAst(block))
+		local is_local, tbl, idkind, name, args, block = data[1], data[2], data[3], data[4], data[5], data[6]
+
+		if tbl then
+			-- function foo.bar(), function foo:bar()
+			return fmt("%sfunction %s%s%s(%s)\n%s\nend", is_local and "local " or "", tbl, idkind, name, table.concat(args, ", "), self:transpileAst(block))
+		else
+			-- function bar()
+			return fmt("%sfunction %s(%s)\n%s\nend", is_local and "local " or "", name, table.concat(args, ", "), self:transpileAst(block))
+		end
 	end,
 
 	[NODE_KINDS.LVarDecl] = function(self, data)
@@ -44,6 +118,51 @@ local Transpilers = {
 
 	---@param self Transpiler
 	---@param data table
+	[NODE_KINDS.Index] = function(self, data)
+		local kind, tbl, key = data[1], data[2], data[3]
+		if kind == "[]" then
+			return fmt("%s[%s]", self:transpile(tbl), self:transpile(key))
+		else
+			-- Ident
+			return fmt("%s.%s", self:transpile(tbl), key)
+		end
+	end,
+
+	---@param self Transpiler
+	---@param data table
+	[NODE_KINDS.Call] = function(self, data)
+		local expr, args = data[1], data[2]
+		local argstrs = {}
+		for i = 1, #args do
+			argstrs[i] = self:transpile(args[i])
+		end
+
+		return fmt("%s(%s)", self:transpile(expr), table.concat(argstrs, ", "))
+	end,
+
+	---@param self Transpiler
+	---@param data table
+	[NODE_KINDS.Table] = function(self, data)
+		local out = {}
+		for k, field in ipairs(data[1]) do
+			local key, value = field[1], self:transpile(field[2])
+
+			if type(key) == "number" then
+				out[ k ] = value
+			elseif type(key) == "string" then
+				-- Ident
+				out[ k ] = key .. " = " .. value
+			else
+				-- Expr
+				out[ k ] = fmt("[%s] = %s", self:transpile(key), value)
+			end
+		end
+
+		return "{" .. table.concat(out, ", ") .. "}"
+	end,
+
+	---@param self Transpiler
+	---@param data table
 	[NODE_KINDS.Literal] = function(self, data)
 		local kind, raw, val = data[1], data[2], data[3]
 		if kind == "string" then
@@ -53,7 +172,13 @@ local Transpilers = {
 		else
 			return raw
 		end
-	end
+	end,
+
+	---@param self Transpiler
+	---@param data table
+	[NODE_KINDS.Ident] = function(self, data)
+		return data[1]
+	end,
 }
 
 ---@param node Node
@@ -75,6 +200,8 @@ function Transpiler:transpileAst(ast, indent)
 	local ret = {}
 	if not ast then return "" end -- Empty block
 
+	if indent == nil then indent = true end
+
 	self.nodes = ast
 	for i, node in ipairs(ast) do
 		self.current = i
@@ -84,7 +211,12 @@ function Transpiler:transpileAst(ast, indent)
 			ret[i] = self:transpile(node)
 		end
 	end
-	return table.concat(ret, indent and "\n\t" or "\n")
+
+	if indent then
+		return "\t" .. table.concat(ret, "\n\t")
+	else
+		return table.concat(ret, "\n")
+	end
 end
 
 --- Transpiles Lua into.. better lua.
@@ -96,7 +228,7 @@ function Transpiler:process(ast)
 
 	self.ast = ast
 
-	return self:transpileAst(ast)
+	return self:transpileAst(ast, false)
 end
 
 return Transpiler

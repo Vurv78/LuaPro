@@ -17,25 +17,25 @@ local SimpleEscapes = {
 ---@param char string
 ---@return boolean
 local function is_number(char)
-	return char ~= nil and char >= "0" and char <= "9"
+	return char >= "0" and char <= "9"
 end
 
 ---@param char string
 ---@return boolean
 local function is_letter(char)
-	return char ~= nil and (char >= "a" and char <= "z") or (char >= "A" and char <= "Z")
+	return (char >= "a" and char <= "z") or (char >= "A" and char <= "Z")
 end
 
 ---@param char string
 ---@return boolean
 local function is_hex(char)
-	return char ~= nil and (char >= "a" and char <= "f") or (char >= "A" and char <= "F") or is_number(char)
+	return (char >= "a" and char <= "f") or (char >= "A" and char <= "F") or is_number(char)
 end
 
 ---@param char string
 ---@return boolean
 local function is_alphanumeric(char)
-	return char ~= nil and ( (char >= "a" and char <= "z") or (char >= "A" and char <= "Z") or (char >= "0" and char <= "9") )
+	return ( (char >= "a" and char <= "z") or (char >= "A" and char <= "Z") or (char >= "0" and char <= "9") )
 end
 
 ---@return boolean
@@ -59,11 +59,16 @@ end
 ---@field kind integer
 ---@field raw string
 ---@field val any
+---@field data table
 local Token = {}
 Token.__index = Token
 
-function Token.new(kind, raw, val)
-	return setmetatable({kind = kind, raw = raw, val = val}, Token)
+---@param kind TokenKinds
+---@param raw string
+---@param val any
+---@param data table
+function Token.new(kind, raw, val, data)
+	return setmetatable({kind = kind, raw = raw, val = val, data = data}, Token)
 end
 
 ---@class TokenKinds
@@ -136,7 +141,65 @@ function Lexer:parse(src)
 
 	while ptr < length do
 		local char = nextChar()
-		if char == "\n" then
+		if char == nil then
+			error("Unexpected end of input")
+		elseif char == "-" then
+			if peekChar() == "-" then
+				nextChar()
+
+				local start = ptr
+				local val = ""
+
+				if peekChar() == "[" then
+					nextChar()
+
+					-- Multiline comment. Track number of equals signs until it reaches next [
+					local depth = 0
+					while peekChar() ~= "[" do
+						assert( nextChar() == "=", "Invalid multiline comment" )
+						depth = depth + 1
+					end
+
+					nextChar()
+
+					-- Track until ] = * neq ] is found.
+
+					local reached_end = false
+					local found_equals = 0
+					while peekChar() ~= "]" do
+						local c = nextChar()
+						val = val .. c
+					end
+
+					nextChar() -- skip ]
+
+					while peekChar() ~= "]" do
+						assert(nextChar() == "=", "Invalid multiline comment (random stuff inside square brackets!)")
+						found_equals = found_equals + 1
+					end
+
+					assert( nextChar() == "]", "Unexpected end of input in multiline comment" )
+
+					if found_equals ~= depth then
+						error("Invalid multiline comment (unbalanced number of '='. Expected " .. depth .. ", found " .. found_equals .. ")")
+					end
+
+					local raw = string.sub(src, start, ptr)
+					tokens[#tokens + 1] = Token.new(KINDS.MComment, raw, val, { depth })
+				else
+					while peekChar() ~= "\n" do
+						val = val .. nextChar()
+					end
+
+					local raw = string.sub(src, start, ptr)
+
+					nextLine()
+					tokens[#tokens + 1] = Token.new(KINDS.Comment, raw, val)
+				end
+			else
+				tokens[#tokens + 1] = Token.new(KINDS.Operator, char, char)
+			end
+		elseif char == "\n" then
 			nextLine()
 		elseif char == " " or char == "\t" or char == "\r" then
 			-- Skip
@@ -187,10 +250,11 @@ function Lexer:parse(src)
 			local num = { char }
 			local previous_period, has_period = false, false
 
-			local next = nextChar()
+
+			local next = peekChar()
 			if next == "b" then
 				-- Binary 0b10101
-				num[2] = next
+				num[2] = nextChar()
 
 				local char = nextChar()
 				while char == "0" or char == "1" do
@@ -199,16 +263,16 @@ function Lexer:parse(src)
 				end
 			elseif next == "x" then
 				-- Hexadecimal
-				num[2] = next
+				num[2] = nextChar()
 
 				local char = nextChar()
-				while is_number(char) or (char >= "a" and char <= "f") or (char >= "A" and char <= "F") do
+				while char and is_hex(char) do
 					num[#num + 1] = char
 					char = nextChar()
 				end
 			elseif next == "e" then
 				-- Exponent
-				num[2] = next
+				num[2] = nextChar()
 
 				local char = peekChar()
 				if char == "-" or char == "+" then
@@ -219,9 +283,9 @@ function Lexer:parse(src)
 				while is_number(peekChar()) do
 					num[#num + 1] = nextChar()
 				end
-			elseif is_number(next) then
+			elseif is_number(next) or next == "." then
 				-- Decimal
-				num[2] = next
+				num[2] = nextChar()
 
 				local char = nextChar()
 				while char do
@@ -238,22 +302,24 @@ function Lexer:parse(src)
 					elseif previous_period then
 						error("Expected number after period")
 					else
+						prevChar()
 						break
 					end
 
 					num[#num + 1] = char
 					char = nextChar()
 				end
-			elseif not is_whitespace(char) then
+			elseif not is_whitespace(next) and next ~= "," and next ~= ")" then
 				-- Error
-				error("Expected number, got " .. char)
+				error("Expected number, got " .. next .. " at " .. ptr)
 			end
 
 			local raw = table.concat(num)
 			tokens[#tokens + 1] = Token.new( KINDS.Number, raw, tonumber(raw) )
 		elseif is_ident(char) then
 			local ident = { char }
-			while is_ident(peekChar()) do
+
+			while peekChar() and is_ident(peekChar()) do
 				ident[#ident + 1] = nextChar()
 			end
 
@@ -280,7 +346,7 @@ function Lexer:parse(src)
 				end
 			end
 
-			tokens[#tokens + 1] = Token.new(KINDS.Grammar, grammar)
+			tokens[#tokens + 1] = Token.new(KINDS.Grammar, grammar, grammar)
 		elseif OpChars[char] then
 			local op = char .. peekChar()
 			if Operators[op] then
@@ -289,10 +355,8 @@ function Lexer:parse(src)
 			elseif Operators[char] then
 				tokens[#tokens + 1] = Token.new(KINDS.Operator, char, char)
 			else
-				error("Unknown operator " .. op)
+				error("Unknown operator " .. char)
 			end
-		else
-			error("Unexpected end of input")
 		end
 	end
 	return tokens

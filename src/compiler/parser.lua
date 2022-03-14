@@ -2,6 +2,8 @@ local TOKEN_KINDS = require("compiler/lexer").Kinds
 
 ---@class NodeKinds
 local KINDS = {
+	Comment = 0,
+
 	While = 1,
 	For = 2,
 	If = 3,
@@ -17,9 +19,12 @@ local KINDS = {
 	LogicalOps = 11, -- or, and
 	UnaryOps = 12, -- not, -
 	Index = 13, -- . or [] indexing
+	Call = 14, -- foo()
+	MetaCall = 15, -- foo:bar()
 
-	Table = 14, -- {}
-	Literal = 15, -- Number, bool, nil, string
+	Table = 16, -- {}
+	Literal = 17, -- Number, bool, nil, string
+	Ident = 18, -- foo, bar, _foo, _bar
 }
 
 local KINDS_INV = {}
@@ -315,9 +320,7 @@ function Parser:acceptArguments( noparenthesis )
 	if noparenthesis or self:popToken(TOKEN_KINDS.Grammar, "(") then
 		local nargs, args = 1, {}
 
-		print("pk", self:peek())
 		local arg = self:parseExpression(self:nextToken())
-		print("pka",self:peek())
 		while arg do
 			print(arg, nargs)
 			args[nargs] = arg
@@ -327,7 +330,6 @@ function Parser:acceptArguments( noparenthesis )
 				break
 			end
 
-			print("pk", self:peek())
 			if self:popToken(TOKEN_KINDS.Grammar, ",") then
 				arg = assert( self:parseExpression(self:nextToken()), "Expected expression after comma" )
 			else
@@ -341,6 +343,17 @@ function Parser:acceptArguments( noparenthesis )
 end
 
 Statements = {
+	--- Shouldn't be a part of 'Statements' but w/e
+	---@param self Parser
+	---@param token Token
+	[KINDS.Comment] = function(self, token)
+		if isToken(token, TOKEN_KINDS.Comment) then
+			return { false, token.val }
+		elseif isToken(token, TOKEN_KINDS.MComment) then
+			return { true, token.val, token.data[1] }
+		end
+	end,
+
 	---@param self Parser
 	---@param token Token
 	[KINDS.While] = function(self, token)
@@ -411,12 +424,29 @@ Statements = {
 	---@param self Parser
 	---@param token Token
 	[KINDS.Function] = function(self, token)
-		if isToken(token, TOKEN_KINDS.Keyword, "function") then
-			local name = assert( self:acceptIdent(), "Expected identifier after 'function'" )
-			local args = self:acceptParameters()
-			local block = assert( self:acceptBlock(nil, {"end"}), "Expected block after function" )
-			return { name, args, block }
+		local is_local = false
+		if isToken(token, TOKEN_KINDS.Keyword, "local") then
+			if not self:popToken(TOKEN_KINDS.Keyword, "function") then
+				-- Not a function. Local var
+				return
+			end
+			is_local = true
+		elseif not isToken(token, TOKEN_KINDS.Keyword, "function") then
+			-- Not a function
+			return
 		end
+
+		local tbl
+		local name = assert( self:acceptIdent(), "Expected identifier after 'function'" )
+		local idkind = self:popAnyOf(TOKEN_KINDS.Grammar, {".", ":"})
+		if idkind then
+			tbl = name
+			name = assert( self:acceptIdent(), "Expected identifier after '.' or ':'" )
+		end
+
+		local args = self:acceptParameters()
+		local block = assert( self:acceptBlock(nil, {"end"}), "Expected block after function" )
+		return { is_local, tbl, idkind, name, args, block }
 	end,
 
 	--- local a(, b, c) (= 1(, 2, 3))
@@ -428,19 +458,23 @@ Statements = {
 	---@param token Token
 	[KINDS.LVarDecl] = function(self, token)
 		if isToken(token, TOKEN_KINDS.Keyword, "local") then
-			local names = {}
-			while true do
-				local name = assert( self:acceptIdent(), "Expected identifier after 'local'" )
-				names[#names + 1] = name
+			local next = self:peek()
+			if next and next.kind == TOKEN_KINDS.Ident then -- Ugly way to avoid changing my while logic a few lines down :/
+				local names = {}
 
-				if not self:popToken(TOKEN_KINDS.Grammar, ",") then break end
-			end
+				while true do
+					local name = assert( self:acceptIdent(), "Expected identifier after 'local'" )
+					names[#names + 1] = name
 
-			if self:popToken(TOKEN_KINDS.Operator, "=") then
-				local exprs = self:acceptArguments(true)
-				return { names, exprs }
-			else
-				return { names }
+					if not self:popToken(TOKEN_KINDS.Grammar, ",") then break end
+				end
+
+				if self:popToken(TOKEN_KINDS.Operator, "=") then
+					local exprs = self:acceptArguments(true)
+					return { names, exprs }
+				else
+					return { names }
+				end
 			end
 		end
 	end,
@@ -451,20 +485,101 @@ Expressions = {
 	---@param self Parser
 	---@param token Token
 	[1] = function(self, token)
-		local op = isAnyOf(token, TOKEN_KINDS.Operator, {"+", "-", "/", "*"})
-		if op then
-			local left = assert( self:acceptExpression(), "Expected expression after '" .. op .. "'" )
-			local right = assert( self:acceptExpression(), "Expected expression after '" .. op .. "'" )
-			return { KINDS.ArithmeticOps, left, right }
+		return Expressions[2](self, token)
+	end,
+
+	--- Call Expr
+	---@param self Parser
+	---@param token Token
+	[2] = function(self, token)
+		local expr = Expressions[3](self, token)
+		local args = self:acceptArguments()
+
+		if args then
+			return Node.new(KINDS.Call, {expr, args})
 		end
 
-		return Expressions[2](self, token)
+		return expr
+	end,
+
+	--- Index (.foo or ["foo"])
+	---@param self Parser
+	---@param token Token
+	[3] = function(self, token)
+		local expr = Expressions[4](self, token)
+		if self:popToken(TOKEN_KINDS.Grammar, ".") then
+			-- Ident index
+			local index = assert( self:acceptIdent(), "Expected identifier after '.'" )
+			return Node.new(KINDS.Index, {".", expr, index})
+		elseif self:popToken(TOKEN_KINDS.Grammar, "[") then
+			local index = assert( self:acceptExpression(), "Expected expression after '['" )
+			assert( self:popToken(TOKEN_KINDS.Grammar, "]"), "Expected ']' after expression" )
+			return Node.new(KINDS.Index, {"[]", expr, index})
+		end
+
+		return expr
+	end,
+
+	--- Table literal
+	---@param self Parser
+	---@param token Token
+	[4] = function(self, token)
+		if isToken(token, TOKEN_KINDS.Grammar, "{") then
+			local entries = {}
+
+			if self:popToken(TOKEN_KINDS.Grammar, "}") then
+				-- Empty table
+				return Node.new(KINDS.Table, {entries})
+			end
+
+			local arr_index, skip = 1, false
+			while true do
+				local key
+				if self:popToken(TOKEN_KINDS.Grammar, "[") then
+					key = assert( self:acceptExpression(), "Expected expression after '[' for table key")
+					assert( self:popToken(TOKEN_KINDS.Grammar, "]"), "Expected ']' after table key" )
+				elseif self:acceptIdent() then
+					key = self.tokens[ self.tok_idx ].val
+					print("the ident", key)
+				else
+					-- Implicit / array part key
+					local val = self:acceptExpression()
+
+					if val then
+						entries[ #entries + 1 ] = { arr_index, val }
+						arr_index = arr_index + 1
+
+						-- Would love a 'continue' here lua..
+						skip = true
+					else
+						break
+					end
+				end
+
+				if not skip then
+					assert( self:popToken(TOKEN_KINDS.Operator, "="), "Expected '=' after key" )
+					local value = assert( self:acceptExpression(), "Expected value after '='" )
+					entries[#entries + 1] = { key, value }
+				else
+					skip = false
+				end
+
+				if not self:popToken(TOKEN_KINDS.Grammar, ",") then
+					break
+				end
+			end
+
+			assert( self:popToken(TOKEN_KINDS.Grammar, "}"), "Expected '}' after table literal" )
+			return Node.new(KINDS.Table, {entries})
+		end
+
+		return Expressions[5](self, token)
 	end,
 
 	--- Literals
 	---@param self Parser
 	---@param token Token
-	[2] = function(self, token)
+	[5] = function(self, token)
 		if isToken(token, TOKEN_KINDS.Number) then
 			return Node.new( KINDS.Literal, {"number", token.raw, tonumber(token.raw)} )
 		elseif isToken(token, TOKEN_KINDS.Boolean) then
@@ -474,7 +589,17 @@ Expressions = {
 		elseif isToken(token, TOKEN_KINDS.String) then
 			return Node.new( KINDS.Literal, {"string", token.raw, token.val} )
 		end
+		return Expressions[6](self, token)
 	end,
+
+	--- Ident / Variables
+	---@param self Parser
+	---@param token Token
+	[6] = function(self, token)
+		if isToken(token, TOKEN_KINDS.Ident) then
+			return Node.new( KINDS.Ident, {token.raw} )
+		end
+	end
 }
 
 Parser.Kinds = KINDS
