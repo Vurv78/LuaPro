@@ -18,16 +18,17 @@ local KINDS = {
 
 	Escape = 11, -- break, goto, return
 
-	BinaryOps = 12, -- Operators that take two operands.
-	UnaryOps = 13, -- not, -
-	Index = 14, -- . or [] indexing
-	Call = 15, -- foo()
-	MetaCall = 16, -- foo:bar()
+	GroupedExpr = 12, -- (...)
+	BinaryOps = 13, -- Operators that take two operands.
+	UnaryOps = 14, -- not, -
+	Index = 15, -- . or [] indexing
+	Call = 16, -- foo()
+	MetaCall = 17, -- foo:bar()
 
-	Lambda = 17, -- function() end
-	Table = 18, -- {}
-	Literal = 19, -- Number, bool, nil, string
-	Ident = 20, -- foo, bar, _foo, _bar
+	Lambda = 18, -- function() end
+	Table = 19, -- {}
+	Literal = 20, -- Number, bool, nil, string
+	Ident = 21, -- foo, bar, _foo, _bar
 }
 
 local KINDS_INV = {}
@@ -333,6 +334,7 @@ function Parser:acceptExpression()
 	return self:parseExpression(self:nextToken())
 end
 
+---@return table<number, string>
 function Parser:acceptParameters()
 	if not self:popToken(TOKEN_KINDS.Grammar, "(") then return end
 	local args = {}
@@ -539,6 +541,35 @@ Statements = {
 		end
 	end,
 
+	--- local a(, b, c) (= 1(, 2, 3))
+	--- local a
+	--- local a, b, c
+	--- local a = 5
+	--- local a, b, c = 1, 2, 3
+	---@param self Parser
+	---@param token Token
+	[KINDS.VarAssign] = function(self, token)
+		if isToken(token, TOKEN_KINDS.Ident) then
+			local names = {}
+			self:prevToken()
+
+			while true do
+				local name = assert( self:acceptIdent(), "Expected identifier in assignment" )
+				names[#names + 1] = name
+
+				if not self:popToken(TOKEN_KINDS.Grammar, ",") then break end
+			end
+
+			if self:popToken(TOKEN_KINDS.Operator, "=") then
+				local exprs = self:acceptArguments(true)
+				return { names, exprs }
+			else
+				-- Only names were given. Probably an expr?
+				return
+			end
+		end
+	end,
+
 	---@param self Parser
 	---@param token Token
 	[KINDS.Escape] = function(self, token)
@@ -654,10 +685,10 @@ Expressions = {
 	---@param token Token
 	[5] = function(self, token)
 		if isToken(token, TOKEN_KINDS.Keyword, "function") then
-			local args = self:acceptArguments()
+			local params = self:acceptParameters()
 			local body = self:acceptBlock(nil, {"end"})
 
-			return Node.new(KINDS.Lambda, {args, body})
+			return Node.new(KINDS.Lambda, {params, body})
 		end
 
 		return Expressions[6](self, token)
@@ -685,6 +716,19 @@ Expressions = {
 	[7] = function(self, token)
 		if isToken(token, TOKEN_KINDS.Ident) then
 			return Node.new( KINDS.Ident, {token.raw} )
+		end
+		return Expressions[8](self, token)
+	end,
+
+	--- Grouped Expr
+	---@param self Parser
+	---@param token Token
+	[8] = function(self, token)
+		if isToken(token, TOKEN_KINDS.Grammar, "(") then
+			local expr = assert( self:acceptExpression(), "Expected expression after '('" )
+			assert( self:popToken(TOKEN_KINDS.Grammar, ")"), "Expected ')' after expression" )
+
+			return Node.new( KINDS.GroupedExpr, {expr} )
 		end
 	end
 }

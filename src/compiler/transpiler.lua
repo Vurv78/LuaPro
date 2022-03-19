@@ -113,6 +113,24 @@ local Transpilers = {
 		return fmt("do\n%s\nend", self:transpileAst(block))
 	end,
 
+	---@param self Transpiler
+	---@param data table
+	[NODE_KINDS.Escape] = function(self, data)
+		local kind = data[1]
+		if kind == "break" then
+			return "break"
+		else
+			-- "return"
+			if data[2] then
+				-- Simply return
+				return "return"
+			else
+				-- Return with value
+				return fmt("return %s", self:transpile(data[2]))
+			end
+		end
+	end,
+
 	[NODE_KINDS.LVarDecl] = function(self, data)
 		local names, vals = data[1], data[2]
 
@@ -126,6 +144,17 @@ local Transpilers = {
 		else
 			return fmt("local %s", table.concat(names, ", "))
 		end
+	end,
+
+	[NODE_KINDS.VarAssign] = function(self, data)
+		local names, vals = data[1], data[2]
+
+		local valstrs = {}
+		for i = 1, #vals do
+			valstrs[i] = self:transpile(vals[i])
+		end
+
+		return fmt("%s = %s", table.concat(names, ", "), table.concat(valstrs, ", "))
 	end,
 
 	---@param self Transpiler
@@ -177,12 +206,7 @@ local Transpilers = {
 	---@param data table
 	[NODE_KINDS.Lambda] = function(self, data)
 		local args, block = data[1], data[2]
-		local argstrs = {}
-		for i = 1, #args do
-			argstrs[i] = args[i]
-		end
-
-		return fmt("function(%s)\n%s\nend", table.concat(argstrs, ", "), self:transpileAst(block))
+		return fmt("function(%s)\n%s\nend", table.concat(args, ", "), self:transpileAst(block))
 	end,
 
 	---@param self Transpiler
@@ -216,6 +240,12 @@ local Transpilers = {
 	---@param data table
 	[NODE_KINDS.Ident] = function(self, data)
 		return data[1]
+	end,
+
+	---@param self Transpiler
+	---@param data table
+	[NODE_KINDS.GroupedExpr] = function(self, data)
+		return fmt("(%s)", self:transpile(data[1]))
 	end,
 }
 
