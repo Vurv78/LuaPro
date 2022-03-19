@@ -92,6 +92,7 @@ local function Inspect(object, depth, dumped)
 	end
 end
 
-local handle = io.open("../ast.txt", "wb")
+local handle = io.open("../ast.txt.lua", "wb")
+handle:write( "local _ = " )
 handle:write( Inspect(nodes) )
 handle:close()

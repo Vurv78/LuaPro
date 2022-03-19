@@ -102,6 +102,12 @@ local Transpilers = {
 
 	---@param self Transpiler
 	---@param data table
+	[NODE_KINDS.Repeat] = function(self, data)
+		return fmt("repeat\n%s\nuntil %s", self:transpileAst(data[2]), self:transpile(data[1]))
+	end,
+
+	---@param self Transpiler
+	---@param data table
 	[NODE_KINDS.Block] = function(self, data)
 		local block = data[1]
 		return fmt("do\n%s\nend", self:transpileAst(block))

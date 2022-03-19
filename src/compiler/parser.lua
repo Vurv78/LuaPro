@@ -492,6 +492,16 @@ Statements = {
 
 	---@param self Parser
 	---@param token Token
+	[KINDS.Repeat] = function(self, token)
+		if isToken(token, TOKEN_KINDS.Keyword, "repeat") then
+			local block = assert( self:acceptBlock(nil, {"until"}), "Expected block after 'repeat'" )
+			local cond = assert( self:acceptExpression(), "Expected condition after 'until'" )
+			return { cond, block }
+		end
+	end,
+
+	---@param self Parser
+	---@param token Token
 	[KINDS.Block] = function(self, token)
 		if isToken(token, TOKEN_KINDS.Keyword, "do") then
 			local block = self:acceptBlock(nil, {"end"})
