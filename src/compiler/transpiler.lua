@@ -28,7 +28,7 @@ local Transpilers = {
 			local equals = string.rep("=", depth)
 			return fmt("--[%s[%s]%s]", equals, inner, equals)
 		else
-			return "-- " .. inner
+			return "--" .. inner
 		end
 	end,
 
@@ -100,13 +100,19 @@ local Transpilers = {
 		end
 	end,
 
+	---@param self Transpiler
+	---@param data table
+	[NODE_KINDS.Block] = function(self, data)
+		local block = data[1]
+		return fmt("do\n%s\nend", self:transpileAst(block))
+	end,
+
 	[NODE_KINDS.LVarDecl] = function(self, data)
 		local names, vals = data[1], data[2]
 
 		if vals then
 			local valstrs = {}
 			for i = 1, #vals do
-				print("vs", vals[i])
 				valstrs[i] = self:transpile(vals[i])
 			end
 
@@ -159,6 +165,32 @@ local Transpilers = {
 		end
 
 		return "{" .. table.concat(out, ", ") .. "}"
+	end,
+
+	---@param self Transpiler
+	---@param data table
+	[NODE_KINDS.Lambda] = function(self, data)
+		local args, block = data[1], data[2]
+		local argstrs = {}
+		for i = 1, #args do
+			argstrs[i] = args[i]
+		end
+
+		return fmt("function(%s)\n%s\nend", table.concat(argstrs, ", "), self:transpileAst(block))
+	end,
+
+	---@param self Transpiler
+	---@param data table
+	[NODE_KINDS.BinaryOps] = function(self, data)
+		local op, lhs, rhs = data[1], data[2], data[3]
+		return fmt("%s %s %s", self:transpile(lhs), op, self:transpile(rhs))
+	end,
+
+	---@param self Transpiler
+	---@param data table
+	[NODE_KINDS.UnaryOps] = function(self, data)
+		local op, expr = data[1], data[2]
+		return fmt("%s%s", op, self:transpile(expr))
 	end,
 
 	---@param self Transpiler

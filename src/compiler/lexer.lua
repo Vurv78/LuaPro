@@ -197,7 +197,7 @@ function Lexer:parse(src)
 					tokens[#tokens + 1] = Token.new(KINDS.Comment, raw, val)
 				end
 			else
-				tokens[#tokens + 1] = Token.new(KINDS.Operator, char, char)
+				tokens[#tokens + 1] = Token.new(KINDS.Operator, char, char, { "-", 1, true })
 			end
 		elseif char == "\n" then
 			nextLine()
@@ -283,7 +283,7 @@ function Lexer:parse(src)
 				while is_number(peekChar()) do
 					num[#num + 1] = nextChar()
 				end
-			elseif is_number(next) or next == "." then
+			elseif next and is_number(next) or next == "." then
 				-- Decimal
 				num[2] = nextChar()
 
@@ -309,7 +309,7 @@ function Lexer:parse(src)
 					num[#num + 1] = char
 					char = nextChar()
 				end
-			elseif not is_whitespace(next) and next ~= "," and next ~= ")" then
+			elseif next and not is_whitespace(next) and next ~= "," and next ~= ")" and next ~= "]" and next ~= "}" then
 				-- Error
 				error("Expected number, got " .. next .. " at " .. ptr)
 			end
@@ -327,7 +327,7 @@ function Lexer:parse(src)
 			if Keywords[raw] then
 				tokens[#tokens + 1] = Token.new(KINDS.Keyword, raw, raw)
 			elseif Operators[raw] then -- not, or, and
-				tokens[#tokens + 1] = Token.new(KINDS.Operator, raw, raw)
+				tokens[#tokens + 1] = Token.new(KINDS.Operator, raw, raw, Operators[raw])
 			elseif raw == "true" then
 				tokens[#tokens + 1] = Token.new(KINDS.Boolean, raw, true)
 			elseif raw == "false" then
@@ -351,9 +351,9 @@ function Lexer:parse(src)
 			local op = char .. peekChar()
 			if Operators[op] then
 				nextChar()
-				tokens[#tokens + 1] = Token.new(KINDS.Operator, op, op)
+				tokens[#tokens + 1] = Token.new(KINDS.Operator, op, op, Operators[op])
 			elseif Operators[char] then
-				tokens[#tokens + 1] = Token.new(KINDS.Operator, char, char)
+				tokens[#tokens + 1] = Token.new(KINDS.Operator, char, char, Operators[char])
 			else
 				error("Unknown operator " .. char)
 			end

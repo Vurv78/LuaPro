@@ -15,27 +15,58 @@ local Keywords = LUT {
 	"until", "while", "nil"
 }
 
-local Operators = LUT {
-	"^","%", "/", "*", "-", "+", "=", "..",
-	"==", ">", ">=", "<", "<=", "~=",
-
-	"or", "and", "not"
-}
-
---- Returns a lookup table with every character from a table's string keys.
----@param t table
----@return table
-local function charsOfKeys(t)
-	local lut = {}
-	for k, v in pairs(t) do
-		for i = 1, #k do
-			lut[k:sub(i, i)] = true
-		end
-	end
-	return lut
+---@param op string
+---@param precedence integer
+local function Un(op, precedence)
+	return { op, precedence, true }
 end
 
-local OpChars = charsOfKeys(Operators)
+---@param op string
+---@param precedence integer
+local function Bin(op, precedence)
+	return { op, precedence, false }
+end
+
+local Operators = {
+	-- In precedence order
+	Bin("^", 1),
+
+	Un("not", 2),
+	Un("-", 2),
+	Un("#", 2),
+
+	Bin("*", 3),
+	Bin("/", 3),
+	Bin("%", 3),
+
+	Bin("+", 4),
+	Bin("-", 4),
+
+	Bin("..", 5),
+
+	Bin("==", 6),
+	Bin("~=", 6),
+	Bin(">", 6),
+	Bin(">=", 6),
+	Bin("<", 6),
+	Bin("<=", 6),
+
+	Bin("and", 7),
+	Bin("or", 7),
+
+	Bin("=", 8),
+}
+
+local OpChars = {}
+for _, v in ipairs(Operators) do
+	local op = v[1]
+	for i = 1, #op do
+		OpChars[ string.sub(op, i, i) ] = true
+	end
+
+	Operators[op] = v
+end
+
 
 local Grammar = LUT {
 	":", ";", ",", "...", "(", ")", "[", "]", "{", "}", "."

@@ -2,29 +2,32 @@ local TOKEN_KINDS = require("compiler/lexer").Kinds
 
 ---@class NodeKinds
 local KINDS = {
-	Comment = 0,
+	Comment = 0, -- Multiline or single comments
 
-	While = 1,
-	For = 2,
-	If = 3,
-	Elseif = 4,
-	Else = 5,
-	Repeat = 6,
-	Function = 7,
+	While = 1, -- while true do end
+	For = 2, -- for i = 1, 10 do end
+	If = 3, -- if x then end
+	Elseif = 4, -- elseif x then end
+	Else = 5, -- else end
+	Repeat = 6, -- repeat until xyz
+	Function = 7, -- function foo() end
+	Block = 8, -- do end
 
-	LVarDecl = 8, -- local v = ...
-	VarAssign = 9, -- v = ...
+	LVarDecl = 9, -- local v = ...
+	VarAssign = 10, -- v = ...
 
-	ArithmeticOps = 10, -- + - / % *
-	LogicalOps = 11, -- or, and
-	UnaryOps = 12, -- not, -
-	Index = 13, -- . or [] indexing
-	Call = 14, -- foo()
-	MetaCall = 15, -- foo:bar()
+	Escape = 11, -- break, goto, return
 
-	Table = 16, -- {}
-	Literal = 17, -- Number, bool, nil, string
-	Ident = 18, -- foo, bar, _foo, _bar
+	BinaryOps = 12, -- Operators that take two operands.
+	UnaryOps = 13, -- not, -
+	Index = 14, -- . or [] indexing
+	Call = 15, -- foo()
+	MetaCall = 16, -- foo:bar()
+
+	Lambda = 17, -- function() end
+	Table = 18, -- {}
+	Literal = 19, -- Number, bool, nil, string
+	Ident = 20, -- foo, bar, _foo, _bar
 }
 
 local KINDS_INV = {}
@@ -109,6 +112,9 @@ function Parser:next()
 	local tok = self:nextToken()
 	local node = self:parseStatement(tok) or self:parseExpression(tok)
 	if node then
+		while self:popToken( TOKEN_KINDS.Grammar, ";" ) do
+			-- Dump all ;'s. Idk why lua allows this but whatever
+		end
 		return node
 	else
 		error("Unexpected token " .. tok.kind .. " '" .. tok.raw .. "'")
@@ -269,13 +275,46 @@ end
 ---@return string
 function Parser:acceptIdent()
 	local tok = self:popToken(TOKEN_KINDS.Ident)
-	return tok and tok.raw
+	if tok then
+		return tok.raw
+	elseif self:popToken(TOKEN_KINDS.Keyword) then
+		error("Expected identifier, got keyword")
+	end
 end
 
 ---@param tok Token
----@return Node?
-function Parser:parseExpression(tok)
+function Parser:parseExpression( tok )
+	return self:parseExpression1( self:parsePrimary( tok ), 0 )
+end
+
+---@param tok Token
+---@return Node
+function Parser:parsePrimary(tok)
 	return Expressions[1](self, tok)
+end
+
+---@param lhs Node
+---@param min_precedence integer
+---@return Node?
+function Parser:parseExpression1(lhs, min_precedence)
+	local lookahead = self:peek()
+
+	--- Op String, Precedence, Is Unary
+	---@type { [1]: string, [2]: number, [3]: boolean }
+	local dat = lookahead and lookahead.data
+	while isToken(lookahead, TOKEN_KINDS.Operator) and dat[2] >= min_precedence do
+		local op = self:nextToken() -- Consume lookahead
+		local rhs = self:parsePrimary(self:nextToken())
+		lookahead = self:peek()
+
+		while isToken(lookahead, TOKEN_KINDS.Operator) and lookahead.data[2] > dat[2] do
+			rhs = self:parseExpression1(rhs, lookahead.data[2] + 1)
+			lookahead = self:peek()
+		end
+		lhs = Node.new(KINDS.BinaryOps, { op.data[1], lhs, rhs })
+	end
+
+	return lhs
 end
 
 ---@param tok Token
@@ -323,6 +362,8 @@ function Parser:acceptArguments( noparenthesis )
 		local arg = self:parseExpression(self:nextToken())
 		while arg do
 			print(arg, nargs)
+			for k, v in pairs(arg.data) do print(k, v) end
+
 			args[nargs] = arg
 			nargs = nargs + 1
 
@@ -449,6 +490,15 @@ Statements = {
 		return { is_local, tbl, idkind, name, args, block }
 	end,
 
+	---@param self Parser
+	---@param token Token
+	[KINDS.Block] = function(self, token)
+		if isToken(token, TOKEN_KINDS.Keyword, "do") then
+			local block = self:acceptBlock(nil, {"end"})
+			return { block }
+		end
+	end,
+
 	--- local a(, b, c) (= 1(, 2, 3))
 	--- local a
 	--- local a, b, c
@@ -478,10 +528,23 @@ Statements = {
 			end
 		end
 	end,
+
+	---@param self Parser
+	---@param token Token
+	[KINDS.Escape] = function(self, token)
+		if isToken(token, TOKEN_KINDS.Keyword, "return") then
+			local exprs = self:acceptArguments(true)
+			return { "return", exprs }
+		elseif isToken(token, TOKEN_KINDS.Keyword, "goto") then
+			error("Not implemented: goto")
+		elseif isToken(token, TOKEN_KINDS.Keyword, "break") then
+			return { "break" }
+		end
+	end
 }
 
 Expressions = {
-	--- Arithmetic
+	--- Binary Ops
 	---@param self Parser
 	---@param token Token
 	[1] = function(self, token)
@@ -514,6 +577,7 @@ Expressions = {
 		elseif self:popToken(TOKEN_KINDS.Grammar, "[") then
 			local index = assert( self:acceptExpression(), "Expected expression after '['" )
 			assert( self:popToken(TOKEN_KINDS.Grammar, "]"), "Expected ']' after expression" )
+
 			return Node.new(KINDS.Index, {"[]", expr, index})
 		end
 
@@ -540,7 +604,6 @@ Expressions = {
 					assert( self:popToken(TOKEN_KINDS.Grammar, "]"), "Expected ']' after table key" )
 				elseif self:acceptIdent() then
 					key = self.tokens[ self.tok_idx ].val
-					print("the ident", key)
 				else
 					-- Implicit / array part key
 					local val = self:acceptExpression()
@@ -576,10 +639,24 @@ Expressions = {
 		return Expressions[5](self, token)
 	end,
 
-	--- Literals
+	--- Lambda
 	---@param self Parser
 	---@param token Token
 	[5] = function(self, token)
+		if isToken(token, TOKEN_KINDS.Keyword, "function") then
+			local args = self:acceptArguments()
+			local body = self:acceptBlock(nil, {"end"})
+
+			return Node.new(KINDS.Lambda, {args, body})
+		end
+
+		return Expressions[6](self, token)
+	end,
+
+	--- Literals
+	---@param self Parser
+	---@param token Token
+	[6] = function(self, token)
 		if isToken(token, TOKEN_KINDS.Number) then
 			return Node.new( KINDS.Literal, {"number", token.raw, tonumber(token.raw)} )
 		elseif isToken(token, TOKEN_KINDS.Boolean) then
@@ -589,13 +666,13 @@ Expressions = {
 		elseif isToken(token, TOKEN_KINDS.String) then
 			return Node.new( KINDS.Literal, {"string", token.raw, token.val} )
 		end
-		return Expressions[6](self, token)
+		return Expressions[7](self, token)
 	end,
 
 	--- Ident / Variables
 	---@param self Parser
 	---@param token Token
-	[6] = function(self, token)
+	[7] = function(self, token)
 		if isToken(token, TOKEN_KINDS.Ident) then
 			return Node.new( KINDS.Ident, {token.raw} )
 		end
