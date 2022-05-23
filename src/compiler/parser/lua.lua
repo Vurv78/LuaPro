@@ -1,4 +1,4 @@
-local TOKEN_KINDS = require("compiler/lexer").Kinds
+local TOKEN_KINDS = require("compiler/lexer/lua").Kinds
 
 ---@class NodeKinds
 local KINDS = {
@@ -28,7 +28,7 @@ local KINDS = {
 	Lambda = 18, -- function() end
 	Table = 19, -- {}
 	Literal = 20, -- Number, bool, nil, string
-	Ident = 21, -- foo, bar, _foo, _bar
+	Identifier = 21, -- foo, bar, _foo, _bar
 }
 
 local KINDS_INV = {}
@@ -115,10 +115,14 @@ function Parser:next()
 	if node then
 		while self:popToken( TOKEN_KINDS.Grammar, ";" ) do
 			-- Dump all ;'s. Idk why lua allows this but whatever
+			local _ = nil
 		end
+
 		return node
+	elseif tok then
+		error( string.format("Unexpected %s at line %u, chars [%u-%u]", tok, tok.startline, tok.startcol, tok.endcol) )
 	else
-		error("Unexpected token " .. tok.kind .. " '" .. tok.raw .. "'")
+		error( "Unexpected end of file" )
 	end
 end
 
@@ -275,7 +279,7 @@ end
 
 ---@return string
 function Parser:acceptIdent()
-	local tok = self:popToken(TOKEN_KINDS.Ident)
+	local tok = self:popToken(TOKEN_KINDS.Identifier)
 	if tok then
 		return tok.raw
 	elseif self:popToken(TOKEN_KINDS.Keyword) then
@@ -285,7 +289,7 @@ end
 
 ---@param tok Token
 function Parser:parseExpression( tok )
-	return self:parseExpression1( self:parsePrimary( tok ), 0 )
+	return self:parsePrimary(tok) -- self:parseExpression1( self:parsePrimary( tok ), 0 )
 end
 
 ---@param tok Token
@@ -303,12 +307,12 @@ function Parser:parseExpression1(lhs, min_precedence)
 	--- Op String, Precedence, Is Unary
 	---@type { [1]: string, [2]: number, [3]: boolean }
 	local dat = lookahead and lookahead.data
-	while isToken(lookahead, TOKEN_KINDS.Operator) and dat[2] >= min_precedence do
+	while isToken(lookahead, TOKEN_KINDS.Operator) and dat[2] ~= -1 and dat[2] >= min_precedence do
 		local op = self:nextToken() -- Consume lookahead
 		local rhs = self:parsePrimary(self:nextToken())
 		lookahead = self:peek()
 
-		while isToken(lookahead, TOKEN_KINDS.Operator) and lookahead.data[2] > dat[2] do
+		while isToken(lookahead, TOKEN_KINDS.Operator) and lookahead.data[2] ~= -1 and lookahead.data[2] > dat[2] do
 			rhs = self:parseExpression1(rhs, lookahead.data[2] + 1)
 			lookahead = self:peek()
 		end
@@ -519,13 +523,15 @@ Statements = {
 	---@param self Parser
 	---@param token Token
 	[KINDS.LVarDecl] = function(self, token)
+		print("lvardecl", isToken(token, TOKEN_KINDS.Keyword, "local"))
 		if isToken(token, TOKEN_KINDS.Keyword, "local") then
 			local next = self:peek()
-			if next and next.kind == TOKEN_KINDS.Ident then -- Ugly way to avoid changing my while logic a few lines down :/
+			if next and next.kind == TOKEN_KINDS.Identifier then -- Ugly way to avoid changing my while logic a few lines down :/
 				local names = {}
 
 				while true do
 					local name = assert( self:acceptIdent(), "Expected identifier after 'local'" )
+					print("a name", name)
 					names[#names + 1] = name
 
 					if not self:popToken(TOKEN_KINDS.Grammar, ",") then break end
@@ -549,7 +555,7 @@ Statements = {
 	---@param self Parser
 	---@param token Token
 	[KINDS.VarAssign] = function(self, token)
-		if isToken(token, TOKEN_KINDS.Ident) then
+		if isToken(token, TOKEN_KINDS.Identifier) then
 			local names = {}
 			self:prevToken()
 
@@ -597,7 +603,7 @@ Expressions = {
 	---@param token Token
 	[2] = function(self, token)
 		local expr = Expressions[3](self, token)
-		local args = self:acceptArguments()
+		local args = self:acceptArguments(false)
 
 		if args then
 			return Node.new(KINDS.Call, {expr, args})
@@ -698,8 +704,8 @@ Expressions = {
 	---@param self Parser
 	---@param token Token
 	[6] = function(self, token)
-		if isToken(token, TOKEN_KINDS.Number) then
-			return Node.new( KINDS.Literal, {"number", token.raw, tonumber(token.raw)} )
+		if isAnyOfKind(token, {TOKEN_KINDS.Integer, TOKEN_KINDS.Binary, TOKEN_KINDS.Hexadecimal, TOKEN_KINDS.Decimal, TOKEN_KINDS.Octal}) then
+			return Node.new( KINDS.Literal, {"number", token.raw, tonumber(token.raw), token.kind} )
 		elseif isToken(token, TOKEN_KINDS.Boolean) then
 			return Node.new( KINDS.Literal, {"boolean", token.raw, token.raw == "true"} )
 		elseif isToken(token, TOKEN_KINDS.Keyword, "nil") then
@@ -714,8 +720,8 @@ Expressions = {
 	---@param self Parser
 	---@param token Token
 	[7] = function(self, token)
-		if isToken(token, TOKEN_KINDS.Ident) then
-			return Node.new( KINDS.Ident, {token.raw} )
+		if isToken(token, TOKEN_KINDS.Identifier) then
+			return Node.new( KINDS.Identifier, {token.raw} )
 		end
 		return Expressions[8](self, token)
 	end,

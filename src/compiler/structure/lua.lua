@@ -54,17 +54,11 @@ local Operators = {
 	Bin("and", 7),
 	Bin("or", 7),
 
-	Bin("=", 8),
+	Bin("=", -1),
 }
 
-local OpChars = {}
 for _, v in ipairs(Operators) do
-	local op = v[1]
-	for i = 1, #op do
-		OpChars[ string.sub(op, i, i) ] = true
-	end
-
-	Operators[op] = v
+	Operators[ v[1] ] = v
 end
 
 
@@ -75,6 +69,7 @@ local Grammar = LUT {
 return {
 	Keywords = Keywords,
 	Operators = Operators,
-	OpChars = OpChars,
-	Grammar = Grammar
+	Grammar = Grammar,
+
+	LUT = LUT
 }

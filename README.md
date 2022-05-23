@@ -1,4 +1,4 @@
-## 🧐 Luaudit 🚧
+## 🧐 LuaPro 🚧
 > Lua formatter, deobsfuscator, parser, etc
 
 ### Turns

@@ -1,15 +1,22 @@
-local Lexer = require("compiler/lexer")
-local Parser = require("compiler/parser")
-local Transpiler = require("compiler/transpiler")
+package.path = package.path .. ";src/?.lua"
 
-local handle = io.open("../in.lua", "rb")
+---@type Lexer
+local Lexer = require("compiler/lexer/lua")
+
+---@type Parser
+local Parser = require("compiler/parser/lua")
+
+---@type Transpiler
+local Transpiler = require("compiler/codegen/lua")
+
+local handle = assert( io.open("../in.lua", "rb") )
 local src = handle:read("*a")
 
 local lexer = Lexer.new()
 local tokens = lexer:parse(src)
 
 for k, v in ipairs(tokens) do
-	print("Token", k, v.val)
+	print( tostring(v) )
 end
 
 local parser = Parser.new()

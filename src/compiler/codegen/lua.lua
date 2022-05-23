@@ -1,5 +1,5 @@
-local NODE_KINDS = require("compiler/parser").Kinds
-local TOKEN_KINDS = require("compiler/lexer").Kinds
+local NODE_KINDS = require("compiler/parser/lua").Kinds
+local TOKEN_KINDS = require("compiler/lexer/lua").Kinds
 
 ---@class Transpiler
 ---@field nodes table<integer, Node>
@@ -238,7 +238,7 @@ local Transpilers = {
 
 	---@param self Transpiler
 	---@param data table
-	[NODE_KINDS.Ident] = function(self, data)
+	[NODE_KINDS.Identifier] = function(self, data)
 		return data[1]
 	end,
 
