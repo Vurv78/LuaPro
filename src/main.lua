@@ -26,7 +26,7 @@ for k, v in ipairs(nodes) do
 	print("Node", k, v)
 end
 
-local transpiler = Transpiler.new()
+local transpiler = Transpiler.new( require("compiler/codegen/mode-lua/deobsfuscate") )
 local code = transpiler:process(nodes)
 
 local handle = io.open("../out.lua", "wb")
