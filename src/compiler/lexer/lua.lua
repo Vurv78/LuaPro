@@ -1,3 +1,4 @@
+--#region Prelude
 local Structure = require("compiler/structure/lua")
 local Operators, Keywords, Grammar, LUT = Structure.Operators, Structure.Keywords, Structure.Grammar, Structure.LUT
 
@@ -65,7 +66,7 @@ local Token = {}
 Token.__index = Token
 
 function Token:__tostring()
-	return string.format("Token [%s] %s (#%u)", KINDS_INV[self.kind], self.raw and '"' .. self.raw .. '"' or "", self.startline)
+	return string.format("Token [%s] %q L%u(%u-%u)", KINDS_INV[self.kind], self.raw, self.startline, self.startcol, self.endcol)
 end
 
 ---@class NomFlags
@@ -78,6 +79,8 @@ local NomFlags = {
 
 	All       = 0b1111
 }
+
+--#endregion
 
 ---@param flags NomFlags
 ---@param pattern string
@@ -142,7 +145,7 @@ local function nom(flags, pattern, lookup)
 				self.startcol = self.endcol + 1
 				self.endcol = self.endcol + #match
 
-				self.pos = self.pos + #match + 1
+				self.pos = self.pos + #match
 				return { raw = match, data = lookup[match] }
 			end
 		end
@@ -161,12 +164,14 @@ local function nom(flags, pattern, lookup)
 	end
 end
 
+--#region Matchers
+
 local todo = function() end
 
 ---@type table<number, fun(self: Lexer): Token?>
 local Matchers = {
 	[KINDS.Whitespace]  = nom(NomFlags.Newlines, "^(%s+)"),
-	[KINDS.Comment]     = todo, -- nom(NomFlags.None, "^(--[^\n]+)"),
+	[KINDS.Comment]     = nom(NomFlags.None, "^(%-%-[^\n]+)"),
 	[KINDS.MComment]    = todo,
 	[KINDS.Boolean]     = nom(NomFlags.None,  "^(%l+)", LUT { "true", "false" }),
 	[KINDS.Keyword]     = nom(NomFlags.None, "^(%f[%w_][%w_]+%f[^%w_])", Keywords ),
@@ -175,7 +180,7 @@ local Matchers = {
 	[KINDS.Hexadecimal] = nom(NomFlags.Number, "^([-+]?0x[%x]+)"),
 	[KINDS.Octal]       = nom(NomFlags.Number, "^([-+]?0[%o]+)"),
 	[KINDS.Binary]      = nom(NomFlags.Number, "^([-+]?0b[01]+)"), -- LuaJIT specific
-	[KINDS.String]      = nom(NomFlags.Newlines, [[^(%b"")]]),
+	[KINDS.String]      = nom(NomFlags.Newlines, [[^(['"][^"']+['"])]]),
 	[KINDS.MString]     = todo,
 	[KINDS.Operator]    = nom(NomFlags.None, "^([-^n#*/%%+.=~<>ao][o=.r]?[td]?)", Operators), -- why am i doing this
 	[KINDS.Grammar]     = nom(NomFlags.None, "^([.;,(){}%[%]]%.?%.?)", Grammar),
@@ -183,6 +188,7 @@ local Matchers = {
 }
 
 Lexer.Matchers = Matchers
+--#endregion
 
 --- Tokenizes a string into an array (sequential table) of tokens.
 ---@param input string # Expressive source code to tokenize

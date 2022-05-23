@@ -367,8 +367,6 @@ function Parser:acceptArguments( noparenthesis )
 
 		local arg = self:parseExpression(self:nextToken())
 		while arg do
-			for k, v in pairs(arg.data) do print(k, v) end
-
 			args[nargs] = arg
 			nargs = nargs + 1
 
@@ -522,7 +520,6 @@ Statements = {
 	---@param self Parser
 	---@param token Token
 	[KINDS.LVarDecl] = function(self, token)
-		print("lvardecl", isToken(token, TOKEN_KINDS.Keyword, "local"))
 		if isToken(token, TOKEN_KINDS.Keyword, "local") then
 			local next = self:peek()
 			if next and next.kind == TOKEN_KINDS.Identifier then -- Ugly way to avoid changing my while logic a few lines down :/
@@ -530,7 +527,6 @@ Statements = {
 
 				while true do
 					local name = assert( self:acceptIdent(), "Expected identifier after 'local'" )
-					print("a name", name)
 					names[#names + 1] = name
 
 					if not self:popToken(TOKEN_KINDS.Grammar, ",") then break end
