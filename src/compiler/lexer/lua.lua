@@ -85,7 +85,7 @@ local NomFlags = {
 ---@return fun(self: Lexer): boolean
 local function nom(flags, pattern, lookup)
 	assert( type(flags) == "number" and flags <= NomFlags.All, "Invalid flag " .. tostring(flags) )
-	assert(pattern:sub(1, 2) == "^(", "Pattern " .. pattern .. " must start with '^('")
+	assert( pattern:sub(1, 2) == "^(", "Pattern " .. pattern .. " must start with '^('" )
 
 	if bit.band(flags, NomFlags.Newlines) ~= 0 then
 		-- Can't have a lookup table.
@@ -127,7 +127,7 @@ local function nom(flags, pattern, lookup)
 				self.startcol = self.endcol + 1
 				self.endcol = self.endcol + #match + 1
 
-				self.pos = self.pos + #match + 1
+				self.pos = self.pos + #match
 				return { raw = match, value = tonumber(match), negative = match:sub(1, 1) == "-" }
 			end
 		end
@@ -137,7 +137,6 @@ local function nom(flags, pattern, lookup)
 		---@param self Lexer
 		return function(self)
 			local match = string.match(self.input, pattern, self.pos)
-			print(self.input:sub(self.pos, self.pos + 5), pattern, match)
 
 			if lookup[match] ~= nil then
 				self.startcol = self.endcol + 1
@@ -219,6 +218,7 @@ function Lexer:next()
 
 	for kind, matcher in ipairs(Matchers) do
 		local token = matcher(self)
+
 		if token then
 			if kind ~= KINDS.Whitespace then
 				token.kind = kind

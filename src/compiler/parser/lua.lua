@@ -367,7 +367,6 @@ function Parser:acceptArguments( noparenthesis )
 
 		local arg = self:parseExpression(self:nextToken())
 		while arg do
-			print(arg, nargs)
 			for k, v in pairs(arg.data) do print(k, v) end
 
 			args[nargs] = arg

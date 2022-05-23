@@ -36,7 +36,7 @@ local Transpilers = {
 	---@param data table
 	[NODE_KINDS.While] = function(self, data)
 		local cond = self:transpile( data[1] )
-		local body = self:transpile( data[2] )
+		local body = self:transpileAst( data[2] )
 		return fmt("while %s do\n%s\nend", cond, body)
 	end,
 
@@ -246,7 +246,7 @@ local Transpilers = {
 	---@param data table
 	[NODE_KINDS.GroupedExpr] = function(self, data)
 		return fmt("(%s)", self:transpile(data[1]))
-	end,
+	end
 }
 
 ---@param node Node
@@ -262,7 +262,7 @@ function Transpiler:transpile(node)
 end
 
 ---@param ast table<number, Node>
----@param indent boolean
+---@param indent boolean? Indent? Default true
 ---@return string
 function Transpiler:transpileAst(ast, indent)
 	local ret = {}
