@@ -157,10 +157,15 @@ local Transpilers = {
 	---@param self Transpiler
 	---@param data table
 	[NODE_KINDS.Call] = function(self, data)
-		local expr, args = data[1], data[2]
+		---@type Node
+		local expr = data[1]
+
+		---@type table<number, Node>
+		local args = data[2]
+
 		local argstrs = {}
-		for i = 1, #args do
-			argstrs[i] = self:transpile(args[i])
+		for i, arg in ipairs(args) do
+			argstrs[i] = self:transpile(arg)
 		end
 
 		return fmt("%s(%s)", self:transpile(expr), table.concat(argstrs, ", "))

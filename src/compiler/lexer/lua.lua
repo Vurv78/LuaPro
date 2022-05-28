@@ -155,6 +155,16 @@ local function nom(flags, pattern, lookup, handle_val)
 		end
 	else
 		assert( pattern:sub(1, 2) == "^(", "Pattern " .. pattern .. " must start with '^('" )
+
+		if bit.band(flags, NomFlags.Value) ~= 0 then
+			handle_val = handle_val or lookup
+			assert(handle_val ~= nil and type(handle_val) == "function", "Must provide a value handler w/ NomFlags.Value (nom)")
+
+			function make(match)
+				---@diagnostic disable-next-line (False positive shut up sumneko lua)
+				return { raw = match, value = handle_val(match) }
+			end
+		end
 	end
 
 	if bit.band(flags, NomFlags.Newlines) ~= 0 then
@@ -182,14 +192,6 @@ local function nom(flags, pattern, lookup, handle_val)
 				self.pos = ed + 1
 				return make(match)
 			end
-		end
-	elseif bit.band(flags, NomFlags.Value) ~= 0 then
-		handle_val = handle_val or lookup
-		assert(handle_val ~= nil and type(handle_val) == "function", "Must provide a value handler w/ NomFlags.Value (nom)")
-
-		function make(match)
-			---@diagnostic disable-next-line (False positive shut up sumneko lua)
-			return { raw = match, value = handle_val(match) }
 		end
 	end
 

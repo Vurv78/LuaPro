@@ -289,7 +289,7 @@ end
 
 ---@param tok Token
 function Parser:parseExpression( tok )
-	return self:parsePrimary(tok) -- self:parseExpression1( self:parsePrimary( tok ), 0 )
+	return self:parseExpression1( self:parsePrimary( tok ), 0 )
 end
 
 ---@param tok Token
@@ -394,7 +394,6 @@ Statements = {
 		if isToken(token, TOKEN_KINDS.Comment) then
 			return { false, token.value }
 		elseif isToken(token, TOKEN_KINDS.MComment) then
-			print( unpack(token.data), token.value )
 			return { true, token.value, token.data[1] }
 		end
 	end,
@@ -706,7 +705,7 @@ Expressions = {
 			return Node.new( KINDS.Literal, {"boolean", token.raw, token.raw == "true"} )
 		elseif isToken(token, TOKEN_KINDS.Keyword, "nil") then
 			return Node.new( KINDS.Literal, {"nil", token.raw, nil} )
-		elseif isToken(token, TOKEN_KINDS.String) then
+		elseif isAnyOfKind(token, {TOKEN_KINDS.String, TOKEN_KINDS.MString}) then
 			return Node.new( KINDS.Literal, {"string", token.raw, token.value} )
 		end
 		return Expressions[7](self, token)
