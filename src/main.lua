@@ -15,8 +15,15 @@ local src = handle:read("*a")
 local lexer = Lexer.new()
 local tokens = lexer:parse(src)
 
-for k, v in ipairs(tokens) do
-	print( tostring(v) )
+for k = 1, #tokens do
+	---@type Token
+	local token = tokens[k]
+
+	print( string.format(
+		"%s %q @ %d-%d [%d%s]",
+		Lexer.KINDS_INV[token.kind],
+		token.raw, token.startcol, token.endcol, token.startline, token.endline ~= token.startline and ("-" .. token.endline) or ""
+	) )
 end
 
 local parser = Parser.new()

@@ -29,28 +29,29 @@ function Lexer.new()
 	return instance
 end
 
+-- Hack to get proper token type with typed fields out of Parser:popToken() etc.
 ---@class TokenKinds
-local KINDS = {
-	Whitespace = 1,
-	Comment = 2,
-	MComment = 3,
-	Boolean = 4,
-	Keyword = 5,
-	Decimal = 6,
-	Integer = 7,
-	Hexadecimal = 8,
-	Octal = 9,
-	Binary = 10,
-	String = 11,
-	MString = 12,
-	Operator = 13,
-	Grammar = 14,
-	Identifier = 15
-}
-
+---@field Whitespace WhitespaceToken
+---@field MComment MCommentToken
+---@field Comment CommentToken
+---@field Boolean BooleanToken
+---@field Keyword KeywordToken
+---@field Decimal DecimalToken
+---@field Integer IntegerToken
+---@field Hexadecimal HexadecimalToken
+---@field Octal OctalToken
+---@field Binary BinaryToken
+---@field String StringToken
+---@field MString MStringToken
+---@field Operator OperatorToken
+---@field Grammar GrammarToken
+---@field Identifier IdentifierToken
+local KINDS = {}
 local KINDS_INV = {}
-for k, v in pairs(KINDS) do
-	KINDS_INV[v] = k
+
+for k, v in ipairs {"Whitespace", "MComment", "Comment", "Boolean", "Keyword", "Decimal", "Integer", "Hexadecimal", "Octal", "Binary", "String", "MString", "Operator", "Grammar", "Identifier"} do
+	KINDS[v] = k
+	KINDS_INV[k] = v
 end
 
 ---@class Token
@@ -65,6 +66,28 @@ end
 local Token = {}
 Token.__index = Token
 
+---@class LiteralToken: Token
+---@field value number|string|boolean
+
+---@class NumericToken: LiteralToken
+---@field value number
+
+---@class WhitespaceToken:    Token
+---@class MCommentToken:      Token
+---@class CommentToken:       Token
+---@class BooleanToken:       LiteralToken
+---@class KeywordToken:       Token
+---@class DecimalToken:       NumericToken
+---@class IntegerToken:       NumericToken
+---@class HexadecimalToken:   NumericToken
+---@class OctalToken:         NumericToken
+---@class BinaryToken:        NumericToken
+---@class StringToken:        LiteralToken
+---@class MStringToken:       LiteralToken
+---@class OperatorToken:      Token
+---@class GrammarToken:       Token
+---@class IdentifierToken:    Token
+
 function Token:__tostring()
 	return string.format("Token [%s] %q L%u(%u-%u)", KINDS_INV[self.kind], self.raw, self.startline, self.startcol, self.endcol)
 end
@@ -73,38 +96,79 @@ end
 local NomFlags = {
 	None      = 0b0000,
 	Newlines  = 0b0001, -- Can the pattern have newlines?
-	Number    = 0b0010, -- Get a value from the pattern w/ tonumber
-	Reserved1 = 0b0100, -- Reserved for future use
-	Reserved2 = 0b1000, -- Reserved for future use
+	Value     = 0b0010, -- Get a value from the pattern w/ simple functions like tonumber
+	Delimited = 0b0100, -- Delimited bracket stuff (Strings and Comments)
+	Reserved  = 0b1000, --
 
 	All       = 0b1111
 }
 
 --#endregion
 
+--- Get the stuff in between multiline strings and comments.
+---@param str string
+---@return string inner
+---@return string depth
+local function inner_braces(str)
+	return str:match("%[=*%[([^%]]*)%](=*)%]$")
+end
+
 ---@param flags NomFlags
 ---@param pattern string
 ---@param lookup table<string, boolean>?
+---@param handle_val (fun(match: string): any)?
 ---@return fun(self: Lexer): boolean
-local function nom(flags, pattern, lookup)
+local function nom(flags, pattern, lookup, handle_val)
 	assert( type(flags) == "number" and flags <= NomFlags.All, "Invalid flag " .. tostring(flags) )
-	assert( pattern:sub(1, 2) == "^(", "Pattern " .. pattern .. " must start with '^('" )
+
+	---@param self Lexer
+	local function resolve(self)
+		return self.input:find(pattern, self.pos)
+	end
+
+	---@param match string
+	---@return Token
+	local function make(match)
+		return { raw = match, data = {} }
+	end
+
+	-- Can be combined w/ Newlines flag for stuff like comments.
+	-- Replaces the default pattern search with one based on lua's bracket delimiting for multiline strings and comments.
+	if bit.band(flags, NomFlags.Delimited) ~= 0 then
+		local prefix = pattern -- Could be prefixed by '--' for a comment.
+		---@param self Lexer
+		function resolve(self)
+			local start, ed, depth = self.input:find("^" .. prefix .. "%[(=*)%[", self.pos)
+			if start then
+				local _, ed2 = self.input:find("]" .. ('='):rep(#depth) .. "]", ed + 1, true)
+				if ed2 then
+					return start, ed2, self.input:sub(start, ed2)
+				end
+			end
+		end
+
+		---@param match string
+		---@return MCommentToken | MStringToken
+		function make(match)
+			local inner, depth = inner_braces(match)
+			return { raw = match, value = inner, data = { #depth } }
+		end
+	else
+		assert( pattern:sub(1, 2) == "^(", "Pattern " .. pattern .. " must start with '^('" )
+	end
 
 	if bit.band(flags, NomFlags.Newlines) ~= 0 then
-		-- Can't have a lookup table.
-		assert(not lookup, "Can't have a lookup table with newlines (nom)")
-
 		---@param self Lexer
 		return function(self)
-			local match = string.match(self.input, pattern, self.pos)
+			local _, ed, match = resolve(self)
 
 			if match then
-				local _, nls = string.gsub(match, "\n", "")
+				local _, nls = match:gsub("\n", "")
 				if nls ~= 0 then
 					self.startline = self.endline
 					self.endline = self.endline + nls
 
-					local afternl = assert( string.match(match, "\n(.*)$"), "Wtf??" )
+					local afternl = assert( match:match("\n(.*)$"), "Wtf??" )
 					self.startcol = self.endcol + 1 -- maybe ??
 					self.endcol = #afternl
 				else
@@ -115,88 +179,96 @@ local function nom(flags, pattern, lookup)
 					self.endcol = self.endcol + #match
 				end
 
-				self.pos = self.pos + #match
-
-				return { raw = match }
+				self.pos = ed + 1
+				return make(match)
 			end
 		end
-	elseif bit.band(flags, NomFlags.Number) ~= 0 then
-		assert(not lookup, "Can't have a lookup table with a number (nom)")
+	elseif bit.band(flags, NomFlags.Value) ~= 0 then
+		handle_val = handle_val or lookup
+		assert(handle_val ~= nil and type(handle_val) == "function", "Must provide a value handler w/ NomFlags.Value (nom)")
 
-		---@param self Lexer
-		return function(self)
-			local match = string.match(self.input, pattern, self.pos)
-			if match then
-				self.startcol = self.endcol + 1
-				self.endcol = self.endcol + #match + 1
-
-				self.pos = self.pos + #match
-				return { raw = match, value = tonumber(match), negative = match:sub(1, 1) == "-" }
-			end
+		function make(match)
+			---@diagnostic disable-next-line (False positive shut up sumneko lua)
+			return { raw = match, value = handle_val(match) }
 		end
 	end
 
-	if lookup then
+	if lookup and type(lookup) == "table" then
+		function make(match)
+			return { raw = match, data = lookup[match] }
+		end
+
 		---@param self Lexer
 		return function(self)
-			local match = string.match(self.input, pattern, self.pos)
+			local _, ed, match = resolve(self)
 
 			if lookup[match] ~= nil then
 				self.startcol = self.endcol + 1
 				self.endcol = self.endcol + #match
 
-				self.pos = self.pos + #match
-				return { raw = match, data = lookup[match] }
+				self.pos = ed + 1
+				return make(match)
 			end
 		end
 	else
 		return function(self)
-			local match = string.match(self.input, pattern, self.pos)
+			local _, _, match = resolve(self)
 
 			if match then
 				self.startcol = self.endcol + 1
 				self.endcol = self.endcol + #match
 
-				self.pos = self.pos + #match
-				return { raw = match }
+				self.pos = self.pos + (#match == 1 and 1 or #match + 1)
+				return make(match)
 			end
 		end
 	end
 end
 
 --#region Matchers
+local function val_bool(v)
+	return v == "true"
+end
 
-local todo = function() end
+local function val_comment(str)
+	return str:sub(2)
+end
 
----@type table<number, fun(self: Lexer): Token?>
+local function val_string(s)
+	return s:sub(2, -2)
+end
+
+local val_number = tonumber
+
+local F = NomFlags
 local Matchers = {
-	[KINDS.Whitespace]  = nom(NomFlags.Newlines, "^(%s+)"),
-	[KINDS.Comment]     = nom(NomFlags.None, "^(%-%-[^\n]+)"),
-	[KINDS.MComment]    = todo,
-	[KINDS.Boolean]     = nom(NomFlags.None,  "^(%l+)", LUT { "true", "false" }),
-	[KINDS.Keyword]     = nom(NomFlags.None, "^(%f[%w_][%w_]+%f[^%w_])", Keywords ),
-	[KINDS.Decimal]     = nom(NomFlags.Number, "^([-+]?[0-9]+%.[0-9]+)"),
-	[KINDS.Integer]     = nom(NomFlags.Number, "^([-+]?[0-9]+)"),
-	[KINDS.Hexadecimal] = nom(NomFlags.Number, "^([-+]?0x[%x]+)"),
-	[KINDS.Octal]       = nom(NomFlags.Number, "^([-+]?0[%o]+)"),
-	[KINDS.Binary]      = nom(NomFlags.Number, "^([-+]?0b[01]+)"), -- LuaJIT specific
-	[KINDS.String]      = nom(NomFlags.Newlines, [[^(['"][^"']+['"])]]),
-	[KINDS.MString]     = todo,
-	[KINDS.Operator]    = nom(NomFlags.None, "^([-^n#*/%%+.=~<>ao][o=.r]?[td]?)", Operators), -- why am i doing this
-	[KINDS.Grammar]     = nom(NomFlags.None, "^([.;,(){}%[%]]%.?%.?)", Grammar),
-	[KINDS.Identifier]  = nom(NomFlags.None, "^([%a_][%w_]*)")
+	[KINDS.Whitespace]  = nom(F.Newlines, "^(%s+)"),
+	[KINDS.MComment]    = nom(F.Value + F.Delimited + F.Newlines, "%-%-", inner_braces),
+	[KINDS.Comment]     = nom(F.Value + F.None, "^(%-%-[^\n]*)", val_comment),
+	[KINDS.Boolean]     = nom(F.None,  "^(%l+)", LUT { "true", "false" }, val_bool),
+	[KINDS.Keyword]     = nom(F.None, "^(%l+)", Keywords ),
+	[KINDS.Decimal]     = nom(F.Value, "^([0-9]+%.[0-9]+)", val_number),
+	[KINDS.Integer]     = nom(F.Value, "^([0-9]+)", val_number),
+	[KINDS.Hexadecimal] = nom(F.Value, "^(0x[%x]+)", val_number),
+	[KINDS.Octal]       = nom(F.Value, "^(0[%o]+)", val_number),
+	[KINDS.Binary]      = nom(F.Value, "^(0b[01]+)", val_number), -- LuaJIT specific
+	[KINDS.String]      = nom(F.Value + F.Newlines, [[^(['"][^"']*['"])]], val_string),
+	[KINDS.MString]     = nom(F.Value + F.Delimited + F.Newlines, "", inner_braces),
+	[KINDS.Operator]    = nom(F.None, "^([-^n#*/%%+.=~<>ao][o=.r]?[td]?)", Operators), -- why am i doing this
+	[KINDS.Grammar]     = nom(F.None, "^([.;,(){}%[%]]%.?%.?)", Grammar),
+	[KINDS.Identifier]  = nom(F.None, "^([%a_][%w_]*)")
 }
 
 Lexer.Matchers = Matchers
 --#endregion
 
---- Tokenizes a string into an array (sequential table) of tokens.
----@param input string # Expressive source code to tokenize
+--- Lexes a string into an array (sequential table) of tokens.
+---@param input string # Source code to lex
 ---@return table<number, Token>
 function Lexer:parse(input)
 	assert(type(input) == "string", "bad argument #1 to 'Lexer:parse' (string expected, got " .. type(input) .. ")")
 
-	-- Reset so this tokenizer can be re-used
+	-- Reset so it can be re-used
 	self:reset()
 	self.input = input
 
@@ -216,7 +288,7 @@ end
 
 --- # Safety
 --- This will throw an error with invalid syntax, so make sure to pcall.
----@return boolean caught Whether the tokenizer caught something. This applies to everything, even stuff without data
+---@return boolean caught Whether the lexer caught something. This applies to everything, even stuff without data
 ---@return Token? tok Table with token id and value
 function Lexer:next()
 	local input = self.input
@@ -232,8 +304,11 @@ function Lexer:next()
 				token.endcol = self.endcol
 				token.startline = self.startline
 				token.endline = self.endline
+				self.startline = self.endline
+
 				return true, setmetatable(token, Token)
 			else
+				self.startline = self.endline
 				return true
 			end
 		end
@@ -243,4 +318,5 @@ function Lexer:next()
 end
 
 Lexer.Kinds = KINDS
+Lexer.KINDS_INV = KINDS_INV
 return Lexer

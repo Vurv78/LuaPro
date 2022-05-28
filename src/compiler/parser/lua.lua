@@ -73,7 +73,7 @@ function Parser.new()
 end
 
 --- Parses a stream of tokens into an abstract syntax tree (AST)
----@param tokens table<number, Token> # Tokens retrieved from the [Tokenizer]
+---@param tokens table<number, Token> # Tokens retrieved from the [Lexer]
 ---@return table<number, Node>
 function Parser:parse(tokens)
 	assert(type(tokens) == "table", "bad argument #1 to 'Parser:parse' (table expected, got " .. type(tokens) .. ")")
@@ -157,16 +157,11 @@ end
 
 --- Returns the last node with the given metadata (assuming it exists and fits the given kind and value)
 ---@param kind NodeKinds
----@param value string?
 ---@return Node
-function Parser:lastNodeWith(kind, value)
+function Parser:lastNodeWith(kind)
 	local last = self:lastNode()
-	if not last then return end
-
-	if value ~= nil  then
-		return (last.kind == kind and last.raw == value) and last
-	else
-		return (last.kind == kind) and last
+	if last then
+		return last.kind == kind
 	end
 end
 
@@ -186,8 +181,9 @@ function Parser:lastNodeAnyOfKind(kind)
 end
 
 --- Returns if a given token is of kind 'kind' and has an inner value
+---@generic T: Token
 ---@param token Token
----@param kind TokenKinds
+---@param kind T
 ---@param value string? # Optional value to match against
 ---@return boolean
 local function isToken(token, kind, value)
@@ -201,8 +197,9 @@ local function isToken(token, kind, value)
 end
 
 --- Like isToken, but accepts an array of values rather than just one
+---@generic T: Token
 ---@param token Token?
----@param kind TokenKinds
+---@param kind T
 ---@param values table<number, string>
 ---@return string # The raw value from 'values' that matched.
 local function isAnyOf(token, kind, values)
@@ -216,8 +213,8 @@ end
 
 --- Like isAnyOf, but for the kind instead of values.
 ---@param token Token?
----@param kinds table<number, TokenKinds>
----@return TokenKinds? # The [TokenKinds] that matched.
+---@param kinds table<number, Token>
+---@return Token? # The [TokenKinds] that matched.
 local function isAnyOfKind(token, kinds)
 	for _, kind in ipairs(kinds) do
 		if isToken(token, kind, nil) then return kind end
@@ -225,9 +222,10 @@ local function isAnyOfKind(token, kinds)
 end
 
 --- Like isToken, but peeks ahead, uses that as the token, skips if it matches it.
----@param kind TokenKinds
+---@generic T: Token
+---@param kind T
 ---@param value string? # Optional value to match against
----@return Token? # The token that matched
+---@return T? # The token that matched
 function Parser:popToken(kind, value)
 	local token = self:peek()
 	if isToken(token, kind, value) then
@@ -236,7 +234,8 @@ function Parser:popToken(kind, value)
 end
 
 --- Same as isAnyOf, but skips if it matches it.
----@param kind TokenKinds
+---@generic T: Token
+---@param kind T
 ---@param values table<number, string> # Values to match against
 ---@return string? # Raw value that matched from 'values'
 function Parser:popAnyOf(kind, values)
@@ -279,6 +278,7 @@ end
 
 ---@return string
 function Parser:acceptIdent()
+	---@type IdentifierToken
 	local tok = self:popToken(TOKEN_KINDS.Identifier)
 	if tok then
 		return tok.raw
@@ -392,9 +392,10 @@ Statements = {
 	---@param token Token
 	[KINDS.Comment] = function(self, token)
 		if isToken(token, TOKEN_KINDS.Comment) then
-			return { false, token.val }
+			return { false, token.value }
 		elseif isToken(token, TOKEN_KINDS.MComment) then
-			return { true, token.val, token.data[1] }
+			print( unpack(token.data), token.value )
+			return { true, token.value, token.data[1] }
 		end
 	end,
 
@@ -645,7 +646,7 @@ Expressions = {
 					key = assert( self:acceptExpression(), "Expected expression after '[' for table key")
 					assert( self:popToken(TOKEN_KINDS.Grammar, "]"), "Expected ']' after table key" )
 				elseif self:acceptIdent() then
-					key = self.tokens[ self.tok_idx ].val
+					key = self.tokens[ self.tok_idx ].value
 				else
 					-- Implicit / array part key
 					local val = self:acceptExpression()
@@ -706,7 +707,7 @@ Expressions = {
 		elseif isToken(token, TOKEN_KINDS.Keyword, "nil") then
 			return Node.new( KINDS.Literal, {"nil", token.raw, nil} )
 		elseif isToken(token, TOKEN_KINDS.String) then
-			return Node.new( KINDS.Literal, {"string", token.raw, token.val} )
+			return Node.new( KINDS.Literal, {"string", token.raw, token.value} )
 		end
 		return Expressions[7](self, token)
 	end,
