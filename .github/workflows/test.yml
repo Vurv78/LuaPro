@@ -17,9 +17,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v1
-    - uses: leafo/gh-actions-lua@v9
-      with:
-        luaVersion: "luajit-2.1.0-beta3"
+    - name: "Install luajit"
+      run: |
+        sudo apt install luajit
+
     - name: "Run Tests"
       run: |
         luajit test/main.lua
