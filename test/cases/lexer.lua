@@ -1,5 +1,3 @@
-package.path = package.path .. ";src/?.lua"
-
 ---@type Lexer
 local Lexer = require("compiler/lexer/lua")
 
