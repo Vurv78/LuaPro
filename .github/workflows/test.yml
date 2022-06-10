@@ -1,0 +1,25 @@
+name: Unit Tests
+
+on:
+  push:
+    paths:
+    - 'lua/**'
+    - 'test/**'
+  pull_request:
+    paths:
+    - 'src/**'
+    - 'test/**'
+  workflow_dispatch:
+
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v1
+    - uses: leafo/gh-actions-lua@v9
+      with:
+        luaVersion: "luajit-2.1.0-beta3"
+    - name: "Run Tests"
+      run: |
+        "luajit test/main.lua"
