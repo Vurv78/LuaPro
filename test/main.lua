@@ -1,5 +1,7 @@
 package.path = package.path .. ";src/?.lua"
 
+require("test/lib")
+
 ---@param path string
 ---@param callback fun(path: string)
 local function iterFiles(path, callback)
