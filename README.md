@@ -32,7 +32,9 @@ until true
 ```
 
 ## Features
-* Formatting Lua 5.1 / LuaJIT code with indentation etc.
-* Detects basic syntax errors
-* Transforms hex escapes into their ASCII equivalents in strings for easy visibility.
-* It's pure lua 🌔
+* It's written in pure, optimized lua (best with luajit) 🌔
+* Formatting Lua 5.1 / LuaJIT code with proper indentation, spacing.
+* `Deobsfuscate` mode on top of formatting to reveal complex literals (and will later optimize away garbage code).
+* Supports 5.1, 5.2, 5.3 and LuaJIT (5.4 not tested)*
+
+\* Note you will need to provide your own bit library polyfills for lua 5.3 or 5.1. (5.2 and jit are fine)
