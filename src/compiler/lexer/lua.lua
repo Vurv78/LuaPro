@@ -92,15 +92,20 @@ function Token:__tostring()
 	return string.format("Token [%s] %q L%u(%u-%u)", KINDS_INV[self.kind], self.raw, self.startline, self.startcol, self.endcol)
 end
 
+-- Avoid use of binary literals since they require luajit 2.1+ and regular lua doesn't support them at all.
+local function b(n)
+	return tonumber(n, 2)
+end
+
 ---@class NomFlags
 local NomFlags = {
-	None      = 0b0000,
-	Newlines  = 0b0001, -- Can the pattern have newlines?
-	Value     = 0b0010, -- Get a value from the pattern w/ simple functions like tonumber
-	Delimited = 0b0100, -- Delimited bracket stuff (Strings and Comments)
-	Reserved  = 0b1000, --
+	None      = b"0000",
+	Newlines  = b"0001", -- Can the pattern have newlines?
+	Value     = b"0010", -- Get a value from the pattern w/ simple functions like tonumber
+	Delimited = b"0100", -- Delimited bracket stuff (Strings and Comments)
+	Reserved  = b"1000", --
 
-	All       = 0b1111
+	All       = b"1111"
 }
 
 --#endregion
