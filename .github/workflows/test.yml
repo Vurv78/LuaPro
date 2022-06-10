@@ -22,4 +22,4 @@ jobs:
         luaVersion: "luajit-2.1.0-beta3"
     - name: "Run Tests"
       run: |
-        "luajit test/main.lua"
+        luajit test/main.lua
