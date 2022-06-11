@@ -2,10 +2,15 @@ package.path = package.path .. ";src/?.lua"
 
 require("test/lib")
 
+local path_sep = package.config:sub(1, 1)
+local traverse_cmd = path_sep == "\\" and "dir /b " or "ls "
+
 ---@param path string
 ---@param callback fun(path: string)
 local function iterFiles(path, callback)
-	local dir = io.popen("ls " .. path)
+	path = string.gsub(path, "/", path_sep)
+
+	local dir = io.popen(traverse_cmd .. path)
 	for file in dir:lines() do
 		callback(file)
 	end
