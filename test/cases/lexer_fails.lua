@@ -1,4 +1,4 @@
-local Lexer = require("compiler/lexer/lua")
+local Lexer = require("lexer/lua")
 
 local lexer = Lexer.new()
 

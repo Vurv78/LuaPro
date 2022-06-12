@@ -1,5 +1,5 @@
-local Lexer = require("compiler/lexer/lua")
-local Parser = require("compiler/parser/lua")
+local Lexer = require("lexer/lua")
+local Parser = require("parser/lua")
 
 local lexer = Lexer.new()
 

@@ -1,5 +1,5 @@
-local Lexer = require("compiler/lexer/lua")
-local Parser = require("compiler/parser/lua")
+local Lexer = require("lexer/lua")
+local Parser = require("parser/lua")
 
 local lexer = Lexer.new()
 local tokens = lexer:parse([[
@@ -25,8 +25,17 @@ assert(nodes[1].data[1][1] == "X" and nodes[1].data[2][1].kind == Parser.Kinds.L
 
 assert(nodes[2].kind == Parser.Kinds.VarAssign)
 assert(#nodes[2].data[1] == 1, "Expected only 1 variable in assignment")
-assert(nodes[2].data[1][1] == "Y" and nodes[1].data[2][1].kind == Parser.Kinds.Literal, "Expected Y to be a literal")
-assert(nodes[2].data[2][1].data[1] == "string" and nodes[2].data[2][1].data[3] == "World!", "Expected value of literal to be 'World!'" )
+
+-- Assignment contains a list of identifiers OR index ops
+Assert.equal(nodes[2].data[1][1].kind, Parser.Kinds.Identifier)
+Assert.equal(nodes[2].data[2][1].kind, Parser.Kinds.Literal)
+
+-- nodes[2] -> 2nd node (Y = "World!")
+-- .data[2] -> list of values
+-- [1] -> 1st value ("World!") (As a literal node)
+-- .data[1] -> Literal type
+Assert.equal(nodes[2].data[2][1].data[1], "string")
+Assert.equal(nodes[2].data[2][1].data[3], "World!")
 
 assert(nodes[3] and nodes[3].kind == Parser.Kinds.Comment, "Expected comment")
 

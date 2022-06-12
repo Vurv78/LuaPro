@@ -1,5 +1,5 @@
 ---@type NodeKinds
-local NODE_KINDS = require("compiler/parser/lua").Kinds
+local NODE_KINDS = require("parser/lua").Kinds
 
 local fmt = string.format
 
@@ -138,14 +138,20 @@ local Transpilers = {
 	---@param self Transpiler
 	---@param data table
 	[NODE_KINDS.VarAssign] = function(self, data)
-		local names, vals = data[1], data[2]
+		local params, vals = data[1], data[2]
+
+		local idents = {}
+
+		for k, node in ipairs(params) do
+			idents[k] = self:transpile(node)
+		end
 
 		local valstrs = {}
 		for i = 1, #vals do
 			valstrs[i] = self:transpile(vals[i])
 		end
 
-		return fmt("%s = %s", table.concat(names, ", "), table.concat(valstrs, ", "))
+		return fmt("%s = %s", table.concat(idents, ", "), table.concat(valstrs, ", "))
 	end,
 
 	---@param self Transpiler

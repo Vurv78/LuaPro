@@ -24,7 +24,7 @@ loadstring = loadstring or load
 Assert = {}
 function Assert.equal(a, b)
 	if a ~= b then
-		error(string.format("Assertion failed:\n\t%q\n\t~=\n\t%q", a, b))
+		error(string.format("Assertion failed:\n%q\n\t--- ~= ---\n%q", a, b))
 	end
 end
 

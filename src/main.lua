@@ -1,10 +1,10 @@
 package.path = package.path .. ";src/?.lua"
 
-local Lexer = require("compiler/lexer/lua").new()
-local Parser = require("compiler/parser/lua").new()
+local Lexer = require("lexer/lua").new()
+local Parser = require("parser/lua").new()
 
-local Transpiler = require("compiler/codegen/lua")
-local Formatter = Transpiler.new( require("compiler/codegen/mode-lua/format") )
+local Transpiler = require("codegen/lua")
+local Formatter = Transpiler.new( require("codegen/mode-lua/format") )
 
 --- Indented print.
 -- Removes indentation from the given string so you can indent the string source without it affecting the output.

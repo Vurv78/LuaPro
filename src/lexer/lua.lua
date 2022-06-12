@@ -1,5 +1,5 @@
 --#region Prelude
-local Structure = require("compiler/structure/lua")
+local Structure = require("structure/lua")
 local Operators, Keywords, Grammar, LUT = Structure.Operators, Structure.Keywords, Structure.Grammar, Structure.LUT
 
 ---@class Lexer

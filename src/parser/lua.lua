@@ -1,4 +1,4 @@
-local TOKEN_KINDS = require("compiler/lexer/lua").Kinds
+local TOKEN_KINDS = require("lexer/lua").Kinds
 
 ---@class NodeKinds
 local KINDS = {
@@ -359,7 +359,7 @@ function Parser:acceptParameters()
 	local args = {}
 	if self:popToken(TOKEN_KINDS.Grammar, ")") then return args end
 
-	local arg, ty
+	local arg
 	while self:hasTokens() do
 		arg = self:acceptIdent()
 		if not arg then break end
@@ -398,6 +398,22 @@ function Parser:acceptArguments( noparenthesis )
 		end
 
 		return args
+	end
+end
+
+--- Tries to accept an indexing operation e.g. `.b` or `[1]`
+---@return string kind
+---@return Node|string|nil index
+function Parser:acceptIndex()
+	if self:popToken(TOKEN_KINDS.Grammar, ".") then
+		-- Ident index
+		local index = assert( self:acceptIdent(), "Expected identifier after '.'" )
+		return ".", index
+	elseif self:popToken(TOKEN_KINDS.Grammar, "[") then
+		local index = assert( self:acceptExpression(), "Expected expression after '['" )
+		assert( self:popToken(TOKEN_KINDS.Grammar, "]"), "Expected ']' after expression" )
+
+		return "[]", index
 	end
 end
 
@@ -566,19 +582,27 @@ Statements = {
 	---@param token Token
 	[KINDS.VarAssign] = function(self, token)
 		if isToken(token, TOKEN_KINDS.Identifier) then
-			local names = {}
+			local idents = {}
 			self:prevToken()
 
 			while true do
-				local name = assert( self:acceptIdent(), "Expected identifier in assignment" )
-				names[#names + 1] = name
+				local ident = assert( self:popToken(TOKEN_KINDS.Identifier), "Expected identifier in assignment" )
+				local kind, idx = self:acceptIndex()
+
+				local ident_node = Node.new(KINDS.Identifier, {ident.raw})
+
+				if kind then
+					idents[#idents + 1] = Node.new(KINDS.Index, {kind, ident_node, idx})
+				else
+					idents[#idents + 1] = ident_node
+				end
 
 				if not self:popToken(TOKEN_KINDS.Grammar, ",") then break end
 			end
 
 			if self:popToken(TOKEN_KINDS.Operator, "=") then
 				local exprs = self:acceptArguments(true)
-				return { names, exprs }
+				return { idents, exprs }
 			else
 				-- Only names were given. Probably an expr?
 				return
@@ -636,16 +660,9 @@ Expressions = {
 	---@param token Token
 	[3] = function(self, token)
 		local expr = Expressions[4](self, token)
-		if self:popToken(TOKEN_KINDS.Grammar, ".") then
-			-- Ident index
-			local index = assert( self:acceptIdent(), "Expected identifier after '.'" )
-			return Node.new(KINDS.Index, {".", expr, index})
-		elseif self:popToken(TOKEN_KINDS.Grammar, "[") then
-			local index = assert( self:acceptExpression(), "Expected expression after '['" )
-			assert( self:popToken(TOKEN_KINDS.Grammar, "]"), "Expected ']' after expression" )
 
-			return Node.new(KINDS.Index, {"[]", expr, index})
-		end
+		local idx = self:acceptIndex(expr)
+		if idx then return idx end
 
 		return expr
 	end,
