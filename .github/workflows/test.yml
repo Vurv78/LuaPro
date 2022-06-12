@@ -3,7 +3,7 @@ name: Unit Tests
 on:
   push:
     paths:
-    - 'lua/**'
+    - 'src/**'
     - 'test/**'
   pull_request:
     paths:
