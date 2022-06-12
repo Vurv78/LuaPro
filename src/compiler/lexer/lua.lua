@@ -36,6 +36,7 @@ end
 ---@field Comment CommentToken
 ---@field Boolean BooleanToken
 ---@field Keyword KeywordToken
+---@field Label LabelToken
 ---@field Hexadecimal HexadecimalToken
 ---@field Octal OctalToken
 ---@field Binary BinaryToken
@@ -49,7 +50,16 @@ end
 local KINDS = {}
 local KINDS_INV = {}
 
-for k, v in ipairs {"Whitespace", "MComment", "Comment", "Boolean", "Keyword", "Hexadecimal", "Octal", "Binary", "Decimal", "Integer", "String", "MString", "Operator", "Grammar", "Identifier"} do
+local _kinds = {
+	"Whitespace", "MComment", "Comment",
+	"Boolean", "Keyword", "Label",
+	"Hexadecimal", "Octal", "Binary",
+	"Decimal", "Integer", "String",
+	"MString", "Operator", "Grammar",
+	"Identifier"
+}
+
+for k, v in ipairs(_kinds)  do
 	KINDS[v] = k
 	KINDS_INV[k] = v
 end
@@ -77,6 +87,7 @@ Token.__index = Token
 ---@class CommentToken:       Token
 ---@class BooleanToken:       LiteralToken
 ---@class KeywordToken:       Token
+---@class LabelToken:         Token
 ---@class HexadecimalToken:   NumericToken
 ---@class OctalToken:         NumericToken
 ---@class BinaryToken:        NumericToken
@@ -238,7 +249,11 @@ local function val_bool(v)
 end
 
 local function val_comment(str)
-	return str:sub(2)
+	return str:sub(3)
+end
+
+local function val_label(str)
+	return str:sub(3, -3)
 end
 
 local function val_string(s)
@@ -251,9 +266,10 @@ local F = NomFlags
 local Matchers = {
 	[KINDS.Whitespace]  = nom(F.Newlines, "^(%s+)"),
 	[KINDS.MComment]    = nom(F.Value + F.Delimited + F.Newlines, "%-%-", inner_braces),
-	[KINDS.Comment]     = nom(F.Value + F.None, "^(%-%-[^\n]*)", val_comment),
+	[KINDS.Comment]     = nom(F.Value, "^(%-%-[^\n]*)", val_comment),
 	[KINDS.Boolean]     = nom(F.None,  "^(%l+)", LUT { "true", "false" }, val_bool),
 	[KINDS.Keyword]     = nom(F.None, "^(%l+)", Keywords ),
+	[KINDS.Label]       = nom(F.Value, "^(::[%w_]+::)", val_label),
 	[KINDS.Hexadecimal] = nom(F.Value, "^(0x[%x]+)", val_number),
 	[KINDS.Octal]       = nom(F.Value, "^(0[%o]+)", val_number),
 	[KINDS.Binary]      = nom(F.Value, "^(0b[01]+)", val_number), -- LuaJIT specific

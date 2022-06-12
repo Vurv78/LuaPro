@@ -17,18 +17,19 @@ local KINDS = {
 	VarAssign = 10, -- v = ...
 
 	Escape = 11, -- break, goto, return
+	Label = 12, -- ::label::
 
-	GroupedExpr = 12, -- (...)
-	BinaryOps = 13, -- Operators that take two operands.
-	UnaryOps = 14, -- not, -
-	Index = 15, -- . or [] indexing
-	Call = 16, -- foo()
-	MetaCall = 17, -- foo:bar()
+	GroupedExpr = 13, -- (...)
+	BinaryOps = 14, -- Operators that take two operands.
+	UnaryOps = 15, -- not, -
+	Index = 16, -- . or [] indexing
+	Call = 17, -- foo()
+	MetaCall = 18, -- foo:bar()
 
-	Lambda = 18, -- function() end
-	Table = 19, -- {}
-	Literal = 20, -- Number, bool, nil, string
-	Identifier = 21, -- foo, bar, _foo, _bar
+	Lambda = 19, -- function() end
+	Table = 20, -- {}
+	Literal = 21, -- Number, bool, nil, string
+	Identifier = 22, -- foo, bar, _foo, _bar
 }
 
 local KINDS_INV = {}
@@ -596,7 +597,15 @@ Statements = {
 		elseif isToken(token, TOKEN_KINDS.Keyword, "break") then
 			return { "break" }
 		end
-	end
+	end,
+
+	---@param self Parser
+	---@param token Token
+	[KINDS.Label] = function(self, token)
+		if isToken(token, TOKEN_KINDS.Label) then
+			return { token.value }
+		end
+	end,
 }
 
 Expressions = {
