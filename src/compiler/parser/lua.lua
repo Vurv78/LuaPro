@@ -85,8 +85,9 @@ function Parser:parse(tokens)
 
 	local ok, res = pcall(self.root, self)
 	if not ok then
-		-- local tok = self.tokens[self.tok_idx]
-		error("Parser error: [" .. res .. "]", 0)
+		local tok = self.tokens[self.tok_idx]
+		local msg = string.format("Parser error: [%q] at line %u, cols %u:%u", res, tok.startline, tok.startcol, tok.endcol)
+		error(msg, 0)
 	end
 
 	return res

@@ -36,11 +36,11 @@ end
 ---@field Comment CommentToken
 ---@field Boolean BooleanToken
 ---@field Keyword KeywordToken
----@field Decimal DecimalToken
----@field Integer IntegerToken
 ---@field Hexadecimal HexadecimalToken
 ---@field Octal OctalToken
 ---@field Binary BinaryToken
+---@field Decimal DecimalToken
+---@field Integer IntegerToken
 ---@field String StringToken
 ---@field MString MStringToken
 ---@field Operator OperatorToken
@@ -49,7 +49,7 @@ end
 local KINDS = {}
 local KINDS_INV = {}
 
-for k, v in ipairs {"Whitespace", "MComment", "Comment", "Boolean", "Keyword", "Decimal", "Integer", "Hexadecimal", "Octal", "Binary", "String", "MString", "Operator", "Grammar", "Identifier"} do
+for k, v in ipairs {"Whitespace", "MComment", "Comment", "Boolean", "Keyword", "Hexadecimal", "Octal", "Binary", "Decimal", "Integer", "String", "MString", "Operator", "Grammar", "Identifier"} do
 	KINDS[v] = k
 	KINDS_INV[k] = v
 end
@@ -77,11 +77,11 @@ Token.__index = Token
 ---@class CommentToken:       Token
 ---@class BooleanToken:       LiteralToken
 ---@class KeywordToken:       Token
----@class DecimalToken:       NumericToken
----@class IntegerToken:       NumericToken
 ---@class HexadecimalToken:   NumericToken
 ---@class OctalToken:         NumericToken
 ---@class BinaryToken:        NumericToken
+---@class DecimalToken:       NumericToken
+---@class IntegerToken:       NumericToken
 ---@class StringToken:        LiteralToken
 ---@class MStringToken:       LiteralToken
 ---@class OperatorToken:      Token
@@ -254,11 +254,11 @@ local Matchers = {
 	[KINDS.Comment]     = nom(F.Value + F.None, "^(%-%-[^\n]*)", val_comment),
 	[KINDS.Boolean]     = nom(F.None,  "^(%l+)", LUT { "true", "false" }, val_bool),
 	[KINDS.Keyword]     = nom(F.None, "^(%l+)", Keywords ),
-	[KINDS.Decimal]     = nom(F.Value, "^([0-9]+%.[0-9]+)", val_number),
-	[KINDS.Integer]     = nom(F.Value, "^([0-9]+)", val_number),
 	[KINDS.Hexadecimal] = nom(F.Value, "^(0x[%x]+)", val_number),
 	[KINDS.Octal]       = nom(F.Value, "^(0[%o]+)", val_number),
 	[KINDS.Binary]      = nom(F.Value, "^(0b[01]+)", val_number), -- LuaJIT specific
+	[KINDS.Decimal]     = nom(F.Value, "^([0-9]+%.[0-9]+)", val_number),
+	[KINDS.Integer]     = nom(F.Value, "^([0-9]+)", val_number),
 	[KINDS.String]      = nom(F.Value + F.Newlines, [[^(['"][^"']*['"])]], val_string),
 	[KINDS.MString]     = nom(F.Value + F.Delimited + F.Newlines, "", inner_braces),
 	[KINDS.Operator]    = nom(F.None, "^([-^n#*/%%+.=~<>ao][o=.r]?[td]?)", Operators), -- why am i doing this

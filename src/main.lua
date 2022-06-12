@@ -27,7 +27,8 @@ local Commands = {
 
 			SUBCOMMANDS:
 				format				Formats a script to the output file.
-				ast	 				Generates AST for a script to the output file.
+				ast	 				Generates an AST for a script to the output file.
+				lex	 				Lexes a script to the output file.
 				version 			Prints version.
 				help 				Prints this help.
 		]])
@@ -65,11 +66,25 @@ local Commands = {
 
 		do
 			local handle = assert( io.open(output, "wb"), "Could not open output file." )
-			handle:write( "local _ = " )
-			handle:write( Inspect(nodes) )
+			handle:write( "local _ = " .. Inspect(nodes) )
 			handle:close()
 
 			print("Generated AST for " .. input .. " to " .. output)
+		end
+	end,
+
+	["lex"] = function()
+		local input = assert(arg[2], "No input file specified.")
+		local output = assert(arg[3], "No output file specified.")
+
+		local file = assert( io.open(input, "rb"), "Could not open input file." )
+		local toks = Lexer:parse(file:read "*a")
+		file:close()
+
+		do
+			local handle = assert( io.open(output, "wb"), "Could not open output file." )
+			handle:write( "local _ = " .. Inspect(toks) )
+			handle:close()
 		end
 	end
 }
