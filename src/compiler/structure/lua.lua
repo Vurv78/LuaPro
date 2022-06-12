@@ -12,7 +12,7 @@ end
 local Keywords = LUT {
 	"break", "do", "else", "elseif", "end", "for", "function",
 	"if", "in", "local", "repeat", "return", "then",
-	"until", "while", "nil"
+	"until", "while", "nil", "goto"
 }
 
 ---@param op string

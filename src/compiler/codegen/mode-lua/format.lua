@@ -104,6 +104,8 @@ local Transpilers = {
 		local kind = data[1]
 		if kind == "break" then
 			return "break"
+		elseif kind == "goto" then
+			return fmt("goto %s", data[2])
 		else
 			-- "return"
 			if data[2] then
@@ -116,6 +118,8 @@ local Transpilers = {
 		end
 	end,
 
+	---@param self Transpiler
+	---@param data table
 	[NODE_KINDS.LVarDecl] = function(self, data)
 		local names, vals = data[1], data[2]
 
@@ -131,6 +135,8 @@ local Transpilers = {
 		end
 	end,
 
+	---@param self Transpiler
+	---@param data table
 	[NODE_KINDS.VarAssign] = function(self, data)
 		local names, vals = data[1], data[2]
 
@@ -236,6 +242,12 @@ local Transpilers = {
 	---@param data table
 	[NODE_KINDS.GroupedExpr] = function(self, data)
 		return fmt("(%s)", self:transpile(data[1]))
+	end,
+
+	---@param self Transpiler
+	---@param data table
+	[NODE_KINDS.Label] = function(self, data)
+		return "::" .. data[1] .. "::"
 	end
 }
 

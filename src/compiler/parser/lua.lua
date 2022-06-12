@@ -593,7 +593,8 @@ Statements = {
 			local exprs = self:acceptArguments(true)
 			return { "return", exprs }
 		elseif isToken(token, TOKEN_KINDS.Keyword, "goto") then
-			error("Not implemented: goto")
+			local label = assert( self:acceptIdent(), "Expected label name after 'goto'" )
+			return { "goto", label }
 		elseif isToken(token, TOKEN_KINDS.Keyword, "break") then
 			return { "break" }
 		end
@@ -605,7 +606,7 @@ Statements = {
 		if isToken(token, TOKEN_KINDS.Label) then
 			return { token.value }
 		end
-	end,
+	end
 }
 
 Expressions = {
