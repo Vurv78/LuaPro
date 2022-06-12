@@ -21,6 +21,13 @@ end
 
 loadstring = loadstring or load
 
+Assert = {}
+function Assert.equal(a, b)
+	if a ~= b then
+		error(string.format("Assertion failed:\n\t%s\n\t~=\n\t%s", tostring(a), tostring(b)))
+	end
+end
+
 bit = bit or bit32
 
 if not bit then

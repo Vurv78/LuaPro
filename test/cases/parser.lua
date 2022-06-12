@@ -1,7 +1,4 @@
----@type Lexer
 local Lexer = require("compiler/lexer/lua")
-
----@type Parser
 local Parser = require("compiler/parser/lua")
 
 local lexer = Lexer.new()
@@ -10,6 +7,7 @@ local tokens = lexer:parse([[
 	Y = "World!"
 
 	-- Comment
+	hello(55)
 ]])
 
 assert(tokens, "Failed to parse tokens")

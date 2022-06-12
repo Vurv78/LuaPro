@@ -62,14 +62,18 @@ end
 local Parser = {}
 Parser.__index = Parser
 
+function Parser:reset()
+	self.nodes = {}
+	self.node_idx = 0
+	self.tok_idx = 0
+
+	return self
+end
+
 ---@return Parser
 function Parser.new()
 	---@type Parser
-	return setmetatable({
-		tok_idx = 0,
-		nodes = {},
-		node_idx = 0
-	}, Parser)
+	return setmetatable({}, Parser):reset()
 end
 
 --- Parses a stream of tokens into an abstract syntax tree (AST)
@@ -111,11 +115,20 @@ function Parser:next()
 	end
 
 	local tok = self:nextToken()
-	local node = self:parseStatement(tok) or self:parseExpression(tok)
+
+	local node = self:parseStatement(tok)
+	if not node then
+		local n = self:parseExpression(tok)
+		if n then
+			assert(n.kind == KINDS.Call or n.kind == KINDS.MetaCall, "Can only have call expressions at the top level. Got " .. KINDS_INV[n.kind])
+			node = n
+		end
+	end
+
 	if node then
 		while self:popToken( TOKEN_KINDS.Grammar, ";" ) do
 			-- Dump all ;'s. Idk why lua allows this but whatever
-			local _ = nil
+			local _ = nil -- shut up gluafixer
 		end
 
 		return node

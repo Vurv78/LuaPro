@@ -219,13 +219,13 @@ local function nom(flags, pattern, lookup, handle_val)
 		end
 	else
 		return function(self)
-			local _, _, match = resolve(self)
+			local _, ed, match = resolve(self)
 
 			if match then
 				self.startcol = self.endcol + 1
 				self.endcol = self.endcol + #match
 
-				self.pos = self.pos + (#match == 1 and 1 or #match + 1)
+				self.pos = ed + 1
 				return make(match)
 			end
 		end

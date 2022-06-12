@@ -1,44 +1,78 @@
 package.path = package.path .. ";src/?.lua"
 
----@type Lexer
-local Lexer = require("compiler/lexer/lua")
+local Lexer = require("compiler/lexer/lua").new()
+local Parser = require("compiler/parser/lua").new()
 
----@type Parser
-local Parser = require("compiler/parser/lua")
-
----@type Transpiler
 local Transpiler = require("compiler/codegen/lua")
+local Formatter = Transpiler.new( require("compiler/codegen/mode-lua/format") )
 
-local handle = assert( io.open("../in.lua", "rb") )
-local src = handle:read("*a")
-
-local lexer = Lexer.new()
-local tokens = lexer:parse(src)
-
-for k = 1, #tokens do
-	---@type Token
-	local token = tokens[k]
-
-	print( string.format(
-		"%s %q @ %d-%d [%d%s]",
-		Lexer.KINDS_INV[token.kind],
-		token.raw, token.startcol, token.endcol, token.startline, token.endline ~= token.startline and ("-" .. token.endline) or ""
-	) )
+--- Indented print.
+-- Removes indentation from the given string so you can indent the string source without it affecting the output.
+---@param indent integer
+local function printi(indent, msg)
+	local unindented = string.gsub('\n' .. msg, '\n' .. string.rep('\t', indent), '\n' )
+	print( unindented:sub(2) )
 end
 
-local parser = Parser.new()
-local nodes = parser:parse(tokens)
+local Inspect
 
-for k, v in ipairs(nodes) do
-	print("Node", k, v)
-end
+local Commands = {
+	["help"] = function()
+		printi(3, [[
+			LuaPro [..]
+			Hopeful lua deobsfuscator, formatter, parser, etc
 
-local transpiler = Transpiler.new( require("compiler/codegen/mode-lua/deobsfuscate") )
-local code = transpiler:process(nodes)
+			USAGE:
+				luapro <SUBCOMMAND>
 
-local handle = io.open("../out.lua", "wb")
-handle:write(code)
-handle:close()
+			SUBCOMMANDS:
+				format				Formats a script to the output file.
+				ast	 				Generates AST for a script to the output file.
+				version 			Prints version.
+				help 				Prints this help.
+		]])
+	end,
+
+	["version"] = function()
+		print "LuaPro v0.1.0"
+	end,
+
+	["format"] = function()
+		local input = assert(arg[2], "No input file specified.")
+		local output = assert(arg[3], "No output file specified.")
+
+		local file = assert( io.open(input, "rb"), "Could not open input file." )
+		local toks = Lexer:parse(file:read "*a")
+		local nodes = Parser:parse(toks)
+		local code = Formatter:process(nodes)
+		file:close()
+
+		local out = assert( io.open(output, "wb"), "Could not open output file." )
+		out:write(code)
+
+		print("Formatted " .. input .. " to " .. output)
+	end,
+
+	["ast"] = function()
+		local input = assert(arg[2], "No input file specified.")
+		local output = assert(arg[3], "No output file specified.")
+
+		local file = assert( io.open(input, "rb"), "Could not open input file." )
+		local toks = Lexer:parse(file:read "*a")
+		local nodes = Parser:parse(toks)
+
+		file:close()
+
+		do
+			local handle = assert( io.open(output, "wb"), "Could not open output file." )
+			handle:write( "local _ = " )
+			handle:write( Inspect(nodes) )
+			handle:close()
+
+			print("Generated AST for " .. input .. " to " .. output)
+		end
+	end
+}
 
 local function sort_values(a, b)
 	if type(a) == "number" and type(b) == "number" then
@@ -49,7 +83,7 @@ local function sort_values(a, b)
 end
 
 -- Taken from my other project https://github.com/Vurv78/Expressive
-local function Inspect(object, depth, dumped)
+function Inspect(object, depth, dumped)
 	depth = depth or 0
 
 	if dumped then
@@ -106,7 +140,8 @@ local function Inspect(object, depth, dumped)
 	end
 end
 
-local handle = io.open("../ast.txt.lua", "wb")
-handle:write( "local _ = " )
-handle:write( Inspect(nodes) )
-handle:close()
+if Commands[ arg[1] ] then
+	Commands[ arg[1] ]()
+else
+	Commands["help"]()
+end

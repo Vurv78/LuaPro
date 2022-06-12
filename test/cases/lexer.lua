@@ -1,4 +1,3 @@
----@type Lexer
 local Lexer = require("compiler/lexer/lua")
 
 local lexer = Lexer.new()
