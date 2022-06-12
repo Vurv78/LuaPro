@@ -1,4 +1,4 @@
-## 🧐 LuaPro 🚧
+# 🧐 LuaPro [![CI Badge](https://github.com/Vurv78/LuaPro/actions/workflows/test.yml/badge.svg)](https://github.com/Vurv78/LuaPro/actions) [![License](https://img.shields.io/github/license/Vurv78/LuaPro?color=red&include_prereleases)](https://github.com/Vurv78/LuaPro/blob/master/LICENSE) [![github/Vurv78](https://img.shields.io/discord/824727565948157963?label=Discord&logo=discord&logoColor=ffffff&labelColor=7289DA&color=2c2f33)](https://discord.gg/yXKMt2XUXm)
 > Lua formatter, deobsfuscator, parser, etc
 
 ### Turns
