@@ -28,34 +28,37 @@ local Transpilers = {
 	---@param self Transpiler
 	---@param data table
 	[NODE_KINDS.If] = function(self, data)
-		local cond, block = data[1], data[2]
+		local cond_blocks, else_block = data[1], data[2]
 
-		local next = self:peek()
-		if next and (next.kind == NODE_KINDS.Else or next.kind == NODE_KINDS.Elseif) then
-			return fmt("if %s then %s", self:transpile(cond), self:transpileAst(block))
+		local n_conditions = #cond_blocks
+		if n_conditions == 1 then
+			-- Just the single `if`.
+			if else_block then
+				local cond, block = cond_blocks[1][1], cond_blocks[1][2]
+				return fmt("if %s then\n%s\nelse\n%s\nend", self:transpile(cond), self:transpileAst(block), self:transpileAst(else_block))
+			else
+				local cond, block = cond_blocks[1][1], cond_blocks[1][2]
+				return fmt("if %s then\n%s\nend", self:transpile(cond), self:transpileAst(block))
+			end
+		else
+			if else_block then
+				local rest = {}
+				for k, tbl in ipairs(cond_blocks) do
+					local condition, block = tbl[1], tbl[2]
+					rest[k] = fmt("%sif %s then\n%s\n", k ~= 1 and "else" or "", self:transpile(condition), self:transpileAst(block))
+				end
+
+				return table.concat(rest, "") .. "else\n" .. self:transpileAst(else_block) .. "\nend"
+			else
+				local rest = {}
+				for k, tbl in ipairs(cond_blocks) do
+					local condition, block = tbl[1], tbl[2]
+					rest[k] = fmt("%sif %s then\n%s\n", k ~= 1 and "else" or "", self:transpile(condition), self:transpileAst(block))
+				end
+
+				return table.concat(rest, "") .. "end"
+			end
 		end
-
-		return fmt("if %s then\n%s\nend", self:transpile(cond), self:transpileAst(block))
-	end,
-
-	---@param self Transpiler
-	---@param data table
-	[NODE_KINDS.Elseif] = function(self, data)
-		local cond, block = data[1], data[2]
-
-		local next = self:peek()
-		if next and (next.kind == NODE_KINDS.Else or next.kind == NODE_KINDS.Elseif) then
-			return fmt("elseif %s then %s", self:transpile(cond), self:transpileAst(block))
-		end
-
-		return fmt("elseif %s then\n%s\nend", self:transpile(cond), self:transpileAst(block))
-	end,
-
-	---@param self Transpiler
-	---@param data table
-	[NODE_KINDS.Else] = function(self, data)
-		local block = data[1]
-		return fmt("else\n%s\nend", self:transpileAst(block))
 	end,
 
 	---@param self Transpiler

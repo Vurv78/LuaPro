@@ -29,6 +29,7 @@ repeat
 	end
 until true
 ```
+__This is actively unit tested to ensure it will deobsfuscate properly [see here](test/cases/readme.lua)__
 
 ## Features
 * It's written in pure, optimized lua (best with luajit) 🌔

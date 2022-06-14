@@ -6,30 +6,28 @@ local KINDS = {
 
 	While = 1, -- while true do end
 	For = 2, -- for i = 1, 10 do end
-	If = 3, -- if x then end
-	Elseif = 4, -- elseif x then end
-	Else = 5, -- else end
-	Repeat = 6, -- repeat until xyz
-	Function = 7, -- function foo() end
-	Block = 8, -- do end
+	If = 3, -- if x then elseif y then else end
+	Repeat = 4, -- repeat until xyz
+	Function = 5, -- function foo() end
+	Block = 6, -- do end
 
-	LVarDecl = 9, -- local v = ...
-	VarAssign = 10, -- v = ...
+	LVarDecl = 7, -- local v = ...
+	VarAssign = 8, -- v = ...
 
-	Escape = 11, -- break, goto, return
-	Label = 12, -- ::label::
+	Escape = 9, -- break, goto, return
+	Label = 10, -- ::label::
 
-	GroupedExpr = 13, -- (...)
-	BinaryOps = 14, -- Operators that take two operands.
-	UnaryOps = 15, -- not, -
-	Index = 16, -- . or [] indexing
-	Call = 17, -- foo()
-	MetaCall = 18, -- foo:bar()
+	GroupedExpr = 11, -- (...)
+	BinaryOps = 12, -- Operators that take two operands.
+	UnaryOps = 13, -- not, -
+	Index = 14, -- . or [] indexing
+	Call = 15, -- foo()
+	MetaCall = 16, -- foo:bar()
 
-	Lambda = 19, -- function() end
-	Table = 20, -- {}
-	Literal = 21, -- Number, bool, nil, string
-	Identifier = 22, -- foo, bar, _foo, _bar
+	Lambda = 17, -- function() end
+	Table = 18, -- {}
+	Literal = 19, -- Number, bool, nil, string
+	Identifier = 20, -- foo, bar, _foo, _bar
 }
 
 local KINDS_INV = {}
@@ -265,6 +263,7 @@ end
 ---@param kind "do|then|else"
 ---@param endings boolean|table<number, "else|elseif|end|until">?
 ---@return table<number, Node>
+---@return string? # The ending that was used
 function Parser:acceptBlock(kind, endings)
 	if kind then
 		assert( self:popToken(TOKEN_KINDS.Keyword, kind), "Expected '" .. kind .. "' to start block" )
@@ -273,9 +272,11 @@ function Parser:acceptBlock(kind, endings)
 	local nodes, node_idx = {}, 0
 	endings = endings or { "end" }
 
+
 	-- Empty block
-	if self:popAnyOf(TOKEN_KINDS.Keyword, endings) then
-		return nodes
+	local pop = self:popAnyOf(TOKEN_KINDS.Keyword, endings)
+	if pop then
+		return nodes, pop
 	end
 
 	repeat
@@ -283,8 +284,10 @@ function Parser:acceptBlock(kind, endings)
 		local node = self:next()
 		nodes[node_idx] = node
 
-		if self:popAnyOf(TOKEN_KINDS.Keyword, endings) then
-			return nodes
+		pop = self:popAnyOf(TOKEN_KINDS.Keyword, endings)
+
+		if pop then
+			return nodes, pop
 		end
 	until not node
 
@@ -381,6 +384,11 @@ function Parser:acceptArguments( noparenthesis )
 		local nargs, args = 1, {}
 
 		local arg = self:parseExpression(self:nextToken())
+		if noparenthesis and not arg then
+			-- No expression found, no arguments.
+			self:prevToken()
+		end
+
 		while arg do
 			args[nargs] = arg
 			nargs = nargs + 1
@@ -445,34 +453,28 @@ Statements = {
 	[KINDS.If] = function(self, token)
 		if isToken(token, TOKEN_KINDS.Keyword, "if") then
 			local cond = assert( self:acceptExpression(), "Expected condition after 'if'")
+			local block, ty = self:acceptBlock("then", {"else", "end", "elseif"})
 
-			local block = self:acceptBlock("then", {"else", "end", "elseif"})
-			return { cond, block }
-		end
-	end,
+			local conditions = { {cond, block} }
 
-	---@param self Parser
-	---@param token Token
-	[KINDS.Elseif] = function(self, token)
-		if isToken(token, TOKEN_KINDS.Keyword, "elseif") then
-			assert( self:lastNodeWith(KINDS.If), "Expected if statement before elseif" )
-			local cond = assert( self:acceptExpression(), "Expected condition after 'elseif'" )
-			local block = assert( self:acceptBlock("then", {"end", "else", "elseif"}), "Expected block after 'elseif'" )
 
-			return { cond, block }
-		end
-	end,
+			-- Return a table of this sort of format:
+			-- { [1]: table<number, {Node, table<number, Node>}>, [2]: table<number, Node> }
+			-- Where [1] is a table of conditions and blocks corresponding to the original 'if' block and 'elseif' chains.
+			-- [2] is the 'else' case, if specified
 
-	---@param self Parser
-	---@param token Token
-	[KINDS.Else] = function(self, token)
-		if isToken(token, TOKEN_KINDS.Keyword, "else") then
-			assert( self:lastNodeAnyOfKind({KINDS.If, KINDS.Elseif}), "Expected if or elseif statement before else" )
+			while ty ~= "end" do
+				if ty == "elseif" then
+					cond = assert( self:acceptExpression(), "Expected condition after 'elseif'" )
+					block, ty = self:acceptBlock("then", {"else", "end", "elseif"})
+					conditions[#conditions + 1] = { cond, block }
+				else
+					local else_block = self:acceptBlock(nil, {"end"})
+					return { conditions, else_block }
+				end
+			end
 
-			self:prevToken() -- Go back so that we can use acceptBlock with 'else' as a starting block bracket.
-			local block = assert( self:acceptBlock("else"), "Expected block after 'else'" )
-
-			return { block }
+			return { conditions, nil }
 		end
 	end,
 
