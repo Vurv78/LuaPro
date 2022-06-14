@@ -41,7 +41,8 @@ for _ = 1, CYCLES do
 	assert(ast, "Failed to parse AST")
 end
 
-if os.time() - before > MAX_SECONDS_ELAPSED then
+local elapsed = os.time() - before
+if elapsed > MAX_SECONDS_ELAPSED then
 	local function comma(num)
 		num = tostring(num)
 
@@ -53,5 +54,5 @@ if os.time() - before > MAX_SECONDS_ELAPSED then
 		return num
 	end
 
-	error("Took too long to parse " .. comma(CYCLES * #SRC) .. " loc")
+	error("Took too long to parse " .. comma(CYCLES * #SRC) .. " loc: took " .. comma(elapsed) .. " seconds")
 end
