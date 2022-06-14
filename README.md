@@ -1,5 +1,5 @@
 # 🧐 LuaPro [![CI Badge](https://github.com/Vurv78/LuaPro/actions/workflows/test.yml/badge.svg)](https://github.com/Vurv78/LuaPro/actions) [![License](https://img.shields.io/github/license/Vurv78/LuaPro?color=red&include_prereleases)](https://github.com/Vurv78/LuaPro/blob/master/LICENSE) [![github/Vurv78](https://img.shields.io/discord/824727565948157963?label=Discord&logo=discord&logoColor=ffffff&labelColor=7289DA&color=2c2f33)](https://discord.gg/yXKMt2XUXm)
-> Lua formatter, deobsfuscator, parser, etc
+> Lua formatter, deobfuscator, parser, etc
 
 ### Turns
 ```lua
@@ -19,7 +19,7 @@ repeat
 		print("Hi")
 		(function(a, b, c)
 			a, b = b, c
-			local d = 80
+			local d = 80 --[[0x50]]
 			local e = "print('evil lua code')"
 		end)()
 	until true
@@ -29,12 +29,12 @@ repeat
 	end
 until true
 ```
-__This is actively unit tested to ensure it will deobsfuscate properly [see here](test/cases/readme.lua)__
+__This is actively unit tested to ensure it will deobfuscate properly [see here](test/cases/readme.lua)__
 
 ## Features
-* It's written in pure, optimized lua (best with luajit) 🌔
+* It's written in pure, optimized lua (parses ~1.7m lines in a second) 🌔
 * Formatting Lua 5.1 / LuaJIT code with proper indentation, spacing.
-* `Deobsfuscate` mode on top of formatting to reveal complex literals (and will later optimize away garbage code).
+* `Deobfuscate` mode on top of formatting to reveal complex literals (and will later optimize away garbage code).
 * Supports 5.1, 5.2, 5.3 and LuaJIT (5.4 not tested)*
 
-\* Note you will need to provide your own bit library polyfills for lua 5.3 or 5.1. (5.2 and jit are fine)
+\* Note you will need to provide your own bit library polyfills for versions other than 5.2 and luajit

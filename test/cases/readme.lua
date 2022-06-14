@@ -14,7 +14,7 @@ end
 
 local lexer = require("lexer/lua").new()
 local parser = require("parser/lua").new()
-local transpiler = require("codegen/lua").new(require("codegen/mode-lua/deobsfuscate"))
+local transpiler = require("codegen/lua").new(require("codegen/mode-lua/deobfuscate"))
 
 local tokens = assert( lexer:parse(sources[1]) )
 local nodes = assert( parser:parse(tokens) )

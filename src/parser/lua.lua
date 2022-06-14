@@ -778,5 +778,6 @@ Expressions = {
 }
 
 Parser.Kinds = KINDS
+Parser.Node = Node
 
 return Parser

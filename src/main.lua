@@ -5,6 +5,8 @@ local Parser = require("parser/lua").new()
 
 local Transpiler = require("codegen/lua")
 local Formatter = Transpiler.new( require("codegen/mode-lua/format") )
+local Deobfuscator = Transpiler.new( require("codegen/mode-lua/deobfuscate") )
+local Optimizer = Transpiler.new( require("codegen/mode-lua/optimize") )
 
 --- Indented print.
 -- Removes indentation from the given string so you can indent the string source without it affecting the output.
@@ -20,13 +22,15 @@ local Commands = {
 	["help"] = function()
 		printi(3, [[
 			LuaPro [..]
-			Hopeful lua deobsfuscator, formatter, parser, etc
+			Hopeful lua deobfuscator, formatter, parser, etc
 
 			USAGE:
 				luapro <SUBCOMMAND>
 
 			SUBCOMMANDS:
 				format				Formats a script to the output file.
+				deobfuscate			Deobfuscates a script. (Extends `format`)
+				optimize			Optimizes a script. (Extends `format`)
 				ast	 				Generates an AST for a script to the output file.
 				lex	 				Lexes a script to the output file.
 				version 			Prints version.
@@ -52,6 +56,38 @@ local Commands = {
 		out:write(code)
 
 		print("Formatted " .. input .. " to " .. output)
+	end,
+
+	["deobfuscate"] = function()
+		local input = assert(arg[2], "No input file specified.")
+		local output = assert(arg[3], "No output file specified.")
+
+		local file = assert( io.open(input, "rb"), "Could not open input file." )
+		local toks = Lexer:parse(file:read "*a")
+		local nodes = Parser:parse(toks)
+		local code = Deobfuscator:process(nodes)
+		file:close()
+
+		local out = assert( io.open(output, "wb"), "Could not open output file." )
+		out:write(code)
+
+		print("Deobfuscated " .. input .. " to " .. output)
+	end,
+
+	["optimize"] = function()
+		local input = assert(arg[2], "No input file specified.")
+		local output = assert(arg[3], "No output file specified.")
+
+		local file = assert( io.open(input, "rb"), "Could not open input file." )
+		local toks = Lexer:parse(file:read "*a")
+		local nodes = Parser:parse(toks)
+		local code = Optimizer:process(nodes)
+		file:close()
+
+		local out = assert( io.open(output, "wb"), "Could not open output file." )
+		out:write(code)
+
+		print("Optimized " .. input .. " to " .. output)
 	end,
 
 	["ast"] = function()

@@ -1,6 +1,5 @@
 ---@type NodeKinds
 local NODE_KINDS = require("parser/lua").Kinds
-
 local fmt = string.format
 
 -- Extends format mode
@@ -28,7 +27,12 @@ Mode[NODE_KINDS.Literal] = function(self, data)
 		local str = val:gsub("\\x(%x%x)",function (x) return string.char(tonumber(x,16)) end)
 		return fmt("%q", str)
 	elseif kind == "number" then
-		return tostring(val)
+		val = tostring(val)
+		if val ~= raw then
+			return val .. " --[[" .. raw .. "]]"
+		else
+			return val
+		end
 	else
 		return raw
 	end
