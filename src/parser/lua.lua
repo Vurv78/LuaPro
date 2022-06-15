@@ -652,6 +652,19 @@ Expressions = {
 
 		if args then
 			return Node.new(KINDS.Call, {expr, args})
+		else
+			local str = self:popToken(TOKEN_KINDS.String)
+			if str then
+				local string_node = Node.new(KINDS.Literal, {"string", str.raw, str.value})
+				return Node.new(KINDS.Call, {expr, {string_node}})
+			elseif self:popToken(TOKEN_KINDS.Grammar, "{") then
+				-- Don't need a self:prevToken() here as calling Expressions[4] will not consume the { token itself.
+				-- Probably want a self:currentToken() though :p
+				local tok = self.tokens[self.tok_idx]
+
+				local tbl = assert( Expressions[4](self, tok), "Expected table for table literal call after '{'" )
+				return Node.new(KINDS.Call, {expr, {tbl}})
+			end
 		end
 
 		return expr

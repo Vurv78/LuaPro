@@ -10,8 +10,10 @@ local tokens = lexer:parse([[
 	hello(55)
 
 	::myl_abel::
-
 	goto myl_abel
+
+	print "test"
+	print { "xyz", 52 }
 ]])
 
 assert(tokens, "Failed to parse tokens")
@@ -56,3 +58,18 @@ Assert.equal(nodes[5].data[1], "myl_abel")
 assert(nodes[6] and nodes[6].kind == Parser.Kinds.Escape, "Expected escape")
 Assert.equal(nodes[6].data[1], "goto") -- [1] is the escape type (goto|break|return)
 Assert.equal(nodes[6].data[2], "myl_abel") -- [2] is the label name
+
+Assert.equal(nodes[7].kind, Parser.Kinds.Call)
+Assert.equal(nodes[7].data[1].kind, Parser.Kinds.Identifier)
+Assert.equal(nodes[7].data[1].data[1], "print")
+
+Assert.equal(nodes[7].data[2][1].kind, Parser.Kinds.Literal)
+Assert.equal(nodes[7].data[2][1].data[1], "string")
+Assert.equal(nodes[7].data[2][1].data[3], "test")
+
+Assert.equal(nodes[8].kind, Parser.Kinds.Call)
+Assert.equal(nodes[8].data[1].kind, Parser.Kinds.Identifier)
+Assert.equal(nodes[8].data[1].data[1], "print")
+
+Assert.equal(nodes[8].data[2][1].kind, Parser.Kinds.Table)
+Assert.equal(#nodes[8].data[2][1].data[1], 2) -- 2 elements in table
