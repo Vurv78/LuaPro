@@ -32,7 +32,7 @@ until true
 __This is actively unit tested to ensure it will deobfuscate properly [see here](test/cases/readme.lua)__
 
 ## Features
-* It's written in pure, optimized lua (parses ~1.7m lines in a second) 🌔
+* It's written in pure, optimized lua (parses ~2.5kb of source code in a second) 🌔
 * Formatting Lua 5.1 / LuaJIT code with proper indentation, spacing.
 * `Deobfuscate` mode on top of formatting to reveal complex literals (and will later optimize away garbage code).
 * Supports 5.1, 5.2, 5.3 and LuaJIT (5.4 not tested)*

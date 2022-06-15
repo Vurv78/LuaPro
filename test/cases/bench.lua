@@ -2,21 +2,41 @@
 	Config
 ]]
 
-local CYCLES = 20000
-local MAX_SECONDS_ELAPSED = jit and 1 or 3 -- Allow non-jit versions to be 5x as slow.
+-- Try to parse ~10kb of lua source code.
+-- Source code tries to cover most lua features for all regressions.
+local CYCLES = 30000
+local MAX_SECONDS_ELAPSED = jit and 4 or 12 -- Allow non-jit versions to be 3x as slow.
 
--- 180,000 LOC total (20k * 9 lines)
-local SRC = [[
+local SRC = [==[
 	local X = "Hello"
-	Y = "World!"
+	Y = 55.23
 
 	-- Comment
-	hello(55)
+	--[[
+		Multi-line comment
+	]]
+	world(Y)
 
 	::myl_abel::
-
 	goto myl_abel
-]]
+
+	local Z = {
+		[55] = 2,
+		"test"
+	}
+	function Z.yz(a, b, c)
+		repeat
+		until true
+
+		while true do end
+	end
+
+	local abcdefghijklmnopqrstuvwxyz = [[abcdefghijklmnopqrstuvwxyz]]
+
+	for _ = 1, 2, 3 do
+		return function(lambdafn) end
+	end
+]==]
 
 --[[
 	End Config
@@ -52,11 +72,30 @@ local function comma(num)
 	return num
 end
 
+local UNITS = {"B", "KB", "MB", "GB", "TB"}
+local function format_bytes(bytes)
+	local unit = 0
+
+	while bytes > 1024 do
+		bytes = bytes / 1024
+
+		if unit > 4 then
+			break
+		end
+
+		unit = unit + 1
+	end
+
+	return string.format("%.2f %s", bytes, UNITS[unit])
+end
+
+local formatted_bytes = comma( format_bytes(CYCLES * #SRC) )
+
 local elapsed = os.time() - before
 if elapsed > MAX_SECONDS_ELAPSED then
-	error("Took too long to parse " .. comma(CYCLES * #SRC) .. " loc: took " .. comma(elapsed) .. " seconds")
+	error("Took too long to parse " .. formatted_bytes .. ": took " .. comma(elapsed) .. " seconds")
 end
 
 -- print() is overridden in unit tests (for debugging errors)
 -- use io.write to bypass
-io.write("Parsed " .. comma(CYCLES * #SRC) .. " loc in " .. comma(elapsed) .. " seconds\n")
+io.write("Parsed " .. formatted_bytes .. " in " .. comma(elapsed) .. " seconds\n")
