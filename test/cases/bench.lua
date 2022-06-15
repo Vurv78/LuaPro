@@ -5,7 +5,7 @@
 -- Try to parse ~10kb of lua source code.
 -- Source code tries to cover most lua features for all regressions.
 local CYCLES = 30000
-local MAX_SECONDS_ELAPSED = jit and 4 or 12 -- Allow non-jit versions to be 3x as slow.
+local MAX_SECONDS_ELAPSED = jit and 8 or 24 -- Allow non-jit versions to be 3x as slow.
 
 local SRC = [==[
 	local X = "Hello"
