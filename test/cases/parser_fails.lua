@@ -7,7 +7,8 @@ local PARSE_FAILS = {
 	["while;false;do;end"] = "Expected 'end'",
 	["test"] = "Can't have an expression at the top level",
 	["end"] = "<eof> expected near 'end'",
-	["local = 5"] = "<name> expected near '='"
+	["local = 5"] = "<name> expected near '='",
+	["local not = 22"] = ""
 }
 
 local parser = Parser.new()

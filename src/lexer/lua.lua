@@ -38,7 +38,6 @@ end
 ---@field Keyword KeywordToken
 ---@field Label LabelToken
 ---@field Hexadecimal HexadecimalToken
----@field Octal OctalToken
 ---@field Binary BinaryToken
 ---@field Decimal DecimalToken
 ---@field Integer IntegerToken
@@ -53,8 +52,8 @@ local KINDS_INV = {}
 local _kinds = {
 	"Whitespace", "MComment", "Comment",
 	"Boolean", "Keyword", "Label",
-	"Hexadecimal", "Octal", "Binary",
-	"Decimal", "Integer", "String",
+	"Hexadecimal", "Binary","Decimal", "Integer",
+	"String",
 	"MString", "Operator", "Grammar",
 	"Identifier"
 }
@@ -89,7 +88,6 @@ Token.__index = Token
 ---@class KeywordToken:       Token
 ---@class LabelToken:         Token
 ---@class HexadecimalToken:   NumericToken
----@class OctalToken:         NumericToken
 ---@class BinaryToken:        NumericToken
 ---@class DecimalToken:       NumericToken
 ---@class IntegerToken:       NumericToken
@@ -271,7 +269,6 @@ local Matchers = {
 	[KINDS.Keyword]     = nom(F.None, "^(%l+)", Keywords ),
 	[KINDS.Label]       = nom(F.Value, "^(::[%w_]+::)", val_label),
 	[KINDS.Hexadecimal] = nom(F.Value, "^(0x[%x]+)", val_number),
-	[KINDS.Octal]       = nom(F.Value, "^(0[%o]+)", val_number),
 	[KINDS.Binary]      = nom(F.Value, "^(0b[01]+)", val_number), -- LuaJIT specific
 	[KINDS.Decimal]     = nom(F.Value, "^([0-9]+%.[0-9]+)", val_number),
 	[KINDS.Integer]     = nom(F.Value, "^([0-9]+)", val_number),

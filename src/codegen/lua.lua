@@ -6,6 +6,7 @@ local Transpiler = {}
 Transpiler.__index = Transpiler
 
 ---@param mode table<number, fun(self: Transpiler, data: table<number, any>)>
+---@return Transpiler
 function Transpiler.new(mode)
 	return setmetatable({ transpilers = assert(mode, "Missing transpiler mode") }, Transpiler)
 end
