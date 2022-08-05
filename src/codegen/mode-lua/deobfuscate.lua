@@ -1,4 +1,3 @@
----@type NodeKinds
 local NODE_KINDS = require("parser/lua").Kinds
 local fmt = string.format
 

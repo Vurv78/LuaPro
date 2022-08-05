@@ -1,7 +1,7 @@
 ---@class Transpiler
 ---@field nodes table<integer, Node>
 ---@field current integer
----@field transpilers table<number, fun(self: Transpiler, data: table<number, any>)>
+---@field transpilers table<number, fun(self: Transpiler, data: table<number, any>): string>
 local Transpiler = {}
 Transpiler.__index = Transpiler
 

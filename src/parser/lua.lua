@@ -1,6 +1,6 @@
 local TOKEN_KINDS = require("lexer/lua").Kinds
 
----@class NodeKinds
+---@enum NodeKind
 local KINDS = {
 	Comment = 0, -- Multiline or single comments
 
@@ -39,7 +39,7 @@ local Statements
 local Expressions
 
 ---@class Node
----@field kind NodeKinds
+---@field kind NodeKind
 ---@field data table
 local Node = {}
 Node.__index = Node
@@ -48,7 +48,7 @@ function Node:__tostring()
 	return string.format("Node \"%s\" (#%u)", KINDS_INV[self.kind], #self.data)
 end
 
----@param kind NodeKinds
+---@param kind NodeKind
 ---@param data table
 function Node.new(kind, data)
 	return setmetatable({kind = kind, data = data}, Node)
@@ -169,7 +169,7 @@ function Parser:lastNode()
 end
 
 --- Returns the last node with the given metadata (assuming it exists and fits the given kind and value)
----@param kind NodeKinds
+---@param kind NodeKind
 ---@return Node
 function Parser:lastNodeWith(kind)
 	local last = self:lastNode()
@@ -179,11 +179,11 @@ function Parser:lastNodeWith(kind)
 end
 
 --- Returns the last node with the given metadata (assuming it exists and fits the given kind and value)
----@param kind table<number, NodeKinds>
+---@param kind NodeKind[]
 ---@return boolean
 function Parser:lastNodeAnyOfKind(kind)
 	local last = self:lastNode()
-	if not last then return end
+	if not last then return false end
 
 	for _, k in ipairs(kind) do
 		if last.kind == k then
@@ -636,18 +636,30 @@ Statements = {
 }
 
 Expressions = {
+	--- Unary Ops
+	[1] = function(self, token)
+		if isToken(token, TOKEN_KINDS.Operator, "-") then
+			local exp = Expressions[1](self, self:nextToken())
+			return Node.new(KINDS.UnaryOps, { "-", exp })
+		elseif isToken(token, TOKEN_KINDS.Operator, "not") then
+			local exp = Expressions[1](self, self:nextToken())
+			return Node.new(KINDS.UnaryOps, { "not", exp })
+		end
+		return Expressions[2](self, token)
+	end,
+
 	--- Binary Ops
 	---@param self Parser
 	---@param token Token
-	[1] = function(self, token)
-		return Expressions[2](self, token)
+	[2] = function(self, token)
+		return Expressions[3](self, token)
 	end,
 
 	--- Call Expr
 	---@param self Parser
 	---@param token Token
-	[2] = function(self, token)
-		local expr = Expressions[3](self, token)
+	[3] = function(self, token)
+		local expr = Expressions[4](self, token)
 		local args = self:acceptArguments(false)
 
 		if args then
@@ -673,8 +685,8 @@ Expressions = {
 	--- Index (.foo or ["foo"])
 	---@param self Parser
 	---@param token Token
-	[3] = function(self, token)
-		local expr = Expressions[4](self, token)
+	[4] = function(self, token)
+		local expr = Expressions[5](self, token)
 
 		local idx = self:acceptIndex(expr)
 		if idx then return idx end
@@ -685,7 +697,7 @@ Expressions = {
 	--- Table literal
 	---@param self Parser
 	---@param token Token
-	[4] = function(self, token)
+	[5] = function(self, token)
 		if isToken(token, TOKEN_KINDS.Grammar, "{") then
 			local entries = {}
 
@@ -734,13 +746,13 @@ Expressions = {
 			return Node.new(KINDS.Table, {entries})
 		end
 
-		return Expressions[5](self, token)
+		return Expressions[6](self, token)
 	end,
 
 	--- Lambda
 	---@param self Parser
 	---@param token Token
-	[5] = function(self, token)
+	[6] = function(self, token)
 		if isToken(token, TOKEN_KINDS.Keyword, "function") then
 			local params = self:acceptParameters()
 			local body = self:acceptBlock(nil, {"end"})
@@ -748,13 +760,13 @@ Expressions = {
 			return Node.new(KINDS.Lambda, {params, body})
 		end
 
-		return Expressions[6](self, token)
+		return Expressions[7](self, token)
 	end,
 
 	--- Literals
 	---@param self Parser
 	---@param token Token
-	[6] = function(self, token)
+	[7] = function(self, token)
 		if isAnyOfKind(token, {TOKEN_KINDS.Integer, TOKEN_KINDS.Binary, TOKEN_KINDS.Hexadecimal, TOKEN_KINDS.Decimal, TOKEN_KINDS.Octal}) then
 			return Node.new( KINDS.Literal, {"number", token.raw, tonumber(token.raw), token.kind} )
 		elseif isToken(token, TOKEN_KINDS.Boolean) then
@@ -764,23 +776,23 @@ Expressions = {
 		elseif isAnyOfKind(token, {TOKEN_KINDS.String, TOKEN_KINDS.MString}) then
 			return Node.new( KINDS.Literal, {"string", token.raw, token.value} )
 		end
-		return Expressions[7](self, token)
+		return Expressions[8](self, token)
 	end,
 
 	--- Ident / Variables
 	---@param self Parser
 	---@param token Token
-	[7] = function(self, token)
+	[8] = function(self, token)
 		if isToken(token, TOKEN_KINDS.Identifier) then
 			return Node.new( KINDS.Identifier, {token.raw} )
 		end
-		return Expressions[8](self, token)
+		return Expressions[9](self, token)
 	end,
 
 	--- Grouped Expr
 	---@param self Parser
 	---@param token Token
-	[8] = function(self, token)
+	[9] = function(self, token)
 		if isToken(token, TOKEN_KINDS.Grammar, "(") then
 			local expr = assert( self:acceptExpression(), "Expected expression after '('" )
 			assert( self:popToken(TOKEN_KINDS.Grammar, ")"), "Expected ')' after expression" )

@@ -2,8 +2,6 @@ local Parser = require("parser/lua")
 
 ---@type Node
 local Node = Parser.Node
-
----@type NodeKinds
 local NODE_KINDS = Parser.Kinds
 
 local fmt = string.format
