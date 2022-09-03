@@ -254,11 +254,14 @@ local function val_label(str)
 	return str:sub(3, -3)
 end
 
-local function val_string(s)
-	return s:sub(2, -2)
+local function val_string(str)
+	return str:sub(2, -2)
 end
 
 local val_number = tonumber
+local function val_bnumber(str)
+	return tonumber(str:sub(3), 2)
+end
 
 local F = NomFlags
 local Matchers = {
@@ -269,7 +272,7 @@ local Matchers = {
 	[KINDS.Keyword]     = nom(F.None, "^(%l+)", Keywords ),
 	[KINDS.Label]       = nom(F.Value, "^(::[%w_]+::)", val_label),
 	[KINDS.Hexadecimal] = nom(F.Value, "^(0x[%x]+)", val_number),
-	[KINDS.Binary]      = nom(F.Value, "^(0b[01]+)", val_number), -- LuaJIT specific
+	[KINDS.Binary]      = nom(F.Value, "^(0b[01]+)", val_bnumber), -- LuaJIT specific
 	[KINDS.Decimal]     = nom(F.Value, "^([0-9]+%.[0-9]+)", val_number),
 	[KINDS.Integer]     = nom(F.Value, "^([0-9]+)", val_number),
 	[KINDS.String]      = nom(F.Value + F.Newlines, [[^(['"][^"']*['"])]], val_string),

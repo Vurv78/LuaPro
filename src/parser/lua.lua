@@ -768,7 +768,7 @@ Expressions = {
 	---@param token Token
 	[7] = function(self, token)
 		if isAnyOfKind(token, {TOKEN_KINDS.Integer, TOKEN_KINDS.Binary, TOKEN_KINDS.Hexadecimal, TOKEN_KINDS.Decimal}) then
-			return Node.new( KINDS.Literal, {"number", token.raw, tonumber(token.raw), token.kind} )
+			return Node.new( KINDS.Literal, {"number", token.raw, token.value, token.kind} )
 		elseif isToken(token, TOKEN_KINDS.Boolean) then
 			return Node.new( KINDS.Literal, {"boolean", token.raw, token.raw == "true"} )
 		elseif isToken(token, TOKEN_KINDS.Keyword, "nil") then
