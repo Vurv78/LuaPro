@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<title>LuaPro Playground</title>
+
+	<!-- Fengari -->
+	<script src="https://unpkg.com/fengari-web@0.1.4/dist/fengari-web.js"></script>
+	<link href="style.css" rel="stylesheet">
+</head>
+
+<body>
+	<!-- Editors -->
+	<div class="editors">
+		<textarea id="editor">print("abc")local a,b=55,21;do print("xyz")end;repeat break;repeat print("Hi")(function(a,b,c)a,b=b,c;local d=0x50;local e="\x70\x72\x69\x6e\x74\x28\x27\x65\x76\x69\x6c\x20\x6c\x75\x61\x20\x63\x6f\x64\x65\x27\x29"end)()until true;local f,g,h;for i=1,2,3 do _G["\x6c\x6f\x61\x64\x73\x74\x72\x69\x6e\x67"]=55 end until true</textarea>
+		<textarea id="output" readonly></textarea>
+	</div>
+
+	<select name="mode" id="mode">
+		<option value="Formatter">Formatter</option>
+		<option value="Deobsfuscator">Deobsfuscator</option>
+		<option value="Optimizer">Optimizer</option>
+
+		<option value="AST">AST</option>
+	</select>
+
+	<!-- Lua -->
+	<script src="web.lua" type="application/lua" referrerpolicy="origin"></script>
+	<script src="index.js"></script>
+</body>
+
+</html>

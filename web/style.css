@@ -1,0 +1,26 @@
+html {
+	background-color: rgb(40, 43, 43);
+}
+
+div.editors {
+	width: 100%;
+	height: 80%;
+}
+
+textarea {
+	resize: none;
+	user-select: none;
+}
+
+textarea#editor {
+	width: 100%;
+	height: 500px;
+}
+
+textarea#output {
+	width: 100%;
+	height: 200px;
+
+	resize: none;
+	user-select: none;
+}
