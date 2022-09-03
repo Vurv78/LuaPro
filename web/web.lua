@@ -1,5 +1,6 @@
 local paths = {
 	"?.lua",
+	"../?.lua",
 	"../src/?.lua",
 	"../src/codegen/?.lua",
 	"../src/codegen/mode-lua/?.lua",
@@ -10,7 +11,8 @@ local paths = {
 
 package.path = table.concat(paths, ";") .. package.path
 
-_G.bit = require("bit_polyfill")
+-- bit polyfill
+require("test/lib")
 
 local Lexer = require("lexer/lua").new()
 local Parser = require("parser/lua").new()
