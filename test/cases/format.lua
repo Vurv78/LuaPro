@@ -4,11 +4,11 @@ local Transpiler = require("codegen/lua")
 
 local lexer = Lexer.new()
 local tokens = lexer:parse([[
-local var                               = 55
-xyz = xyz
+local	 var                               = 55
+xyz =    xyz
 
-::test::
-goto test
+  ::test::
+ 	goto  test
 ]])
 
 assert(tokens, "Failed to parse tokens")
