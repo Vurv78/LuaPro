@@ -1,62 +1,12 @@
-name: Unit Tests
+name: Run tests
 
-on:
-  push:
-    paths:
-    - 'src/**'
-    - 'test/**'
-  pull_request:
-    paths:
-    - 'src/**'
-    - 'test/**'
-  workflow_dispatch:
-
+on: push, pull_request
 
 jobs:
-  test_luajit:
+  test:
     runs-on: ubuntu-latest
+
     steps:
-    - uses: actions/checkout@v1
-    - name: "Install luajit"
-      run: |
-        sudo apt install luajit
+      - uses: actions/checkout@v3
 
-    - name: "Run Tests"
-      run: |
-        luajit test/main.lua
-
-  test_lua51:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v1
-    - name: "Install lua 5.1"
-      run: |
-        sudo apt install lua5.1
-
-    - name: "Run Tests"
-      run: |
-        lua test/main.lua
-
-  test_lua52:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v1
-    - name: "Install lua 5.2"
-      run: |
-        sudo apt install lua5.2
-
-    - name: "Run Tests"
-      run: |
-        lua test/main.lua
-
-  test_lua53:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v1
-    - name: "Install lua 5.3"
-      run: |
-        sudo apt install lua5.3
-
-    - name: "Run Tests"
-      run: |
-        lua test/main.lua
+      - uses: TAServers/lest@latest
