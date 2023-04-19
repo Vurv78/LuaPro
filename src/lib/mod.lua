@@ -123,7 +123,7 @@ local function tokenize(src)
 			end
 		end
 
-		local data = consume("^\"([^\"]*)\"") -- Todo: Escapes
+		local data = consume('^\"([^\"]*)\"') -- Todo: Escapes
 		if data then
 			return Token.new(TokenVariant.String, data)
 		end
@@ -704,6 +704,13 @@ local function map(tbl, fn)
 	return out
 end
 
+---@param node Node
+---@return string
+local function block(node)
+	if #node.data == 0 then return " " end
+	return "\n\t" .. node:display():gsub("\n", "\n\t") .. "\n"
+end
+
 function Node:display()
 	local variant, data = self.variant, self.data
 	if variant == NodeVariant.Chunk then ---@cast data Node[]
@@ -712,33 +719,33 @@ function Node:display()
 		return fmt("-- %s", data)
 	elseif variant == NodeVariant.If then
 		local first = table.remove(data, 1)
-		local first = fmt("if %s then\n\t%s\n", first[1]:display(), first[2]:display():gsub("\n", "\n\t"))
+		local first = fmt("if %s then%s", first[1]:display(), block(first[2]))
 
 		local buf = map(data, function (chain)
 			if chain[1] then
-				return fmt("elseif %s then\n\t%s\n", chain[1]:display(), chain[2]:display():gsub("\n", "\n\t"))
+				return fmt("elseif %s then%s", chain[1]:display(), block(chain[2]))
 			else
-				return fmt("else\n\t%s\n", chain[2]:display():gsub("\n", "\n\t"))
+				return "else" .. block(chain[2])
 			end
 		end)
 
 		return first .. concat(buf) .. "end"
 	elseif variant == NodeVariant.While then ---@cast data { [1]: Node, [2]: Node }
-		return fmt("while %s do\n\t%s\nend", data[1]:display(), data[2]:display():gsub("\n", "\n\t"))
+		return fmt("while %s do%send", data[1]:display(), block(data[2]))
 	elseif variant == NodeVariant.For then ---@cast data { [1]: "in"|"=" }
 		if data[1] == "in" then ---@cast data { [1]: "in"|"=", [2]: Token<string>[], [3]: Node[] }
 			local vars, vals = map(data[2], function(t) return t.data end), map(data[3], Node.display)
-			return fmt("for %s in %s do\n\t%s\nend", concat(vars, ", "), concat(vals, ", "), data[4]:display():gsub("\n", "\n\t"))
+			return fmt("for %s in %s do%send", concat(vars, ", "), concat(vals, ", "), block(data[4]))
 		else ---@cast data { [1]: "in"|"=", [2]: Token<string>[], [3]: Node, [4]: Node, [5]: Node?, [6]: Node }
 			local vars = map(data[2], function(t) return t.data end)
-			return fmt("for %s = %s, %s, %s do\n\t%s\nend", concat(vars, ", "), data[3]:display(), data[4]:display(), data[5] and data[5]:display() or "1", data[6]:display():gsub("\n", "\n\t"))
+			return fmt("for %s = %s, %s, %s do%send", concat(vars, ", "), data[3]:display(), data[4]:display(), data[5] and data[5]:display() or "1", block(data[6]))
 		end
 	elseif variant == NodeVariant.Repeat then ---@cast data { [1]: Node, [2]: Node }
-		return fmt("repeat\n\t%s\nuntil %s", data[1]:display():gsub("\n", "\n\t"), data[2]:display())
+		return fmt("repeat%suntil %s", block(data[1]), data[2]:display())
 	elseif variant == NodeVariant.Goto then ---@cast data Token<string>
 		return "goto " .. data.data
 	elseif variant == NodeVariant.Do then ---@cast data Node
-		return fmt("do\n\t%s\nend", data:display())
+		return fmt("do%send", block(data))
 	elseif variant == NodeVariant.Return then ---@cast data Node[]?
 		if data then
 			return "return " .. concat(map(data, Node.display), ", ")
@@ -754,7 +761,7 @@ function Node:display()
 		end
 
 		local parameters = map(data[3], function(t) return t.data or "..." end)
-		return fmt("%sfunction %s(%s)\n\t%s\nend", data[1] and "local " or "", concat(path), concat(parameters, ", "), data[4]:display():gsub("\n", "\n\t"))
+		return fmt("%sfunction %s(%s)%send", data[1] and "local " or "", concat(path), concat(parameters, ", "), block(data[4]))
 	elseif variant == NodeVariant.Label then ---@cast data Token<string>
 		return "::" .. data.data .. "::"
 	elseif variant == NodeVariant.Assign then ---@cast data { [1]: { [1]: Node, [2]: Node[] }[], [2]: Node[] }
@@ -835,8 +842,8 @@ function Node:display()
 				end
 			end)
 
-			if #contents < 5 then
-				return "{}"
+			if #contents < 4 then
+				return "{" .. concat(contents, ", ") .. "}"
 			else
 				return "{\n\t" .. concat(contents, ",\n\t") .. "\n}"
 			end
@@ -852,7 +859,7 @@ function Node:display()
 		if #data[2].data == 0 then
 			return fmt("function(%s) end", concat(params, ", "))
 		else
-			return fmt("function(%s)\n\t%s\nend", concat(params, ", "), data[2]:display():gsub("\n", "\n\t"))
+			return fmt("function(%s)%send", concat(params, ", "), block(data[2]))
 		end
 	elseif variant == NodeVariant.Identifier then ---@cast data Token<string>
 		return data.data
