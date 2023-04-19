@@ -5,9 +5,9 @@
 
 --#region tokenizer
 
----@class Token<T>: { data: T }
+---@class Token<T>: { data: T, variant: TokenVariant }
 ---@field variant TokenVariant
----@field data any
+---@field data unknown # Default generic T = unknown
 local Token = {}
 Token.__index = Token
 
@@ -54,9 +54,9 @@ local function tokenize(src)
 	local ptr, len = 1, #src
 
 	local function skipWhitespace()
-		local _, ws = src:find("^(%s+)", ptr)
-		if ws then
-			ptr = ws + 1
+		local _, ed = src:find("^(%s+)", ptr)
+		if ed then
+			ptr = ed + 1
 		end
 	end
 
@@ -64,7 +64,6 @@ local function tokenize(src)
 	---@return string?
 	local function consume(pattern)
 		skipWhitespace()
-
 		local _, ed, match = src:find(pattern, ptr)
 
 		if ed then
@@ -182,16 +181,15 @@ end
 --#endregion
 
 --#region parser
----@class Node<T>: { variant: NodeVariant, data: T }
+---@class Node
 ---@field variant NodeVariant
 ---@field data any
 local Node = {}
 Node.__index = Node
 
----@generic T
 ---@param variant NodeVariant
----@param data T
----@return Node<T>
+---@param data any
+---@return Node
 function Node.new(variant, data)
 	return setmetatable({ variant = variant, data = data }, Node)
 end
@@ -318,29 +316,31 @@ local function parse(tokens)
 		end
 
 		if consume(TokenVariant.Grammar, "(") then
-			local exp = expr()
+			local exp = assert(expr(), "Expected expression for grouped expression")
 			assert(consume(TokenVariant.Grammar, ")"), "Expected ) to close grouped expression")
 			return Node.new(NodeVariant.Grouped, exp)
 		end
 	end
 
 	local function field() ---@return { [1]: Node?, [2]: Node }
-		local e
 		if consume(TokenVariant.Grammar, "[") then
-			e = expr()
+			local key = assert(expr(), "Expected expression for field key")
 			assert(consume(TokenVariant.Grammar, "]"), "Expected ] to close field key")
+			assert(consume(TokenVariant.Operator, "="), "Expected = to follow field key expression")
+			return { key, assert(expr(), "Expected expression for field value") }
 		else
-			local id = consume(TokenVariant.Identifier)
+			local before, id = index, consume(TokenVariant.Identifier)
 			if id then
-				e = Node.new(NodeVariant.Identifier, id)
+				if consume(TokenVariant.Operator, "=") then
+					local key = Node.new(NodeVariant.Identifier, id)
+					return { key, assert(expr(), "Expected expression for field value") }
+				else -- expression
+					index = before
+					return { nil, expr() }
+				end
+			else
+				return { nil, assert(expr(), "Expected expression for field") }
 			end
-		end
-
-		if e then
-			assert(consume(TokenVariant.Operator, "="), "Expected = to follow field key")
-			return { e, assert(expr(), "Expected expression for field value") }
-		else
-			return { nil, assert(expr(), "Expected expression for field") }
 		end
 	end
 
@@ -487,12 +487,16 @@ local function parse(tokens)
 		return idents
 	end
 
-	---@param msg string
-	---@return Node[]
-	function explist(msg)
-		local exprs = {}
+	---@return Node[]?
+	function explist()
+		local exprs, before = {}, index
 		repeat
-			exprs[#exprs + 1] = assert(expr(), "Expected expression for " .. (msg or "arguments"))
+			local e = expr()
+			if not e then
+				index = before
+				return
+			end
+			exprs[#exprs + 1] = e
 		until not consume(TokenVariant.Grammar, ",")
 		return exprs
 	end
@@ -557,7 +561,7 @@ local function parse(tokens)
 		elseif consume(TokenVariant.Keyword, "for") then
 			local vars = namelist("for loop")
 			if consume(TokenVariant.Keyword, "in") then -- for x, y, z in pairs()
-				local vals = explist("for loop expression")
+				local vals = assert(explist(), "Expected expression in for loop statement")
 				assert(consume(TokenVariant.Keyword, "do"), "Expected do keyword following for loop values")
 				return Node.new(NodeVariant.For, { "in", vars, vals, assert(block("end"), "Expected 'end' to mark end of for loop") })
 			elseif consume(TokenVariant.Operator, "=") then
@@ -629,7 +633,7 @@ local function parse(tokens)
 			else
 				local idents = namelist("local declaration")
 				if consume(TokenVariant.Operator, "=") then
-					return Node.new(NodeVariant.LocalAssign, { idents, explist("local declaration") })
+					return Node.new(NodeVariant.LocalAssign, { idents, assert(explist(), "Expected expression for local declaration") })
 				end
 				return Node.new(NodeVariant.LocalAssign, { idents })
 			end
@@ -640,7 +644,7 @@ local function parse(tokens)
 			end
 			return Node.new(NodeVariant.Goto, label)
 		elseif consume(TokenVariant.Keyword, "return") then
-			return Node.new(NodeVariant.Return, explist("return"))
+			return Node.new(NodeVariant.Return, explist())
 		else
 			local label = consume(TokenVariant.Label)
 			if label then
@@ -653,7 +657,7 @@ local function parse(tokens)
 		if peek(TokenVariant.Identifier) then
 			local paths = varlist("assignment")
 			if consume(TokenVariant.Operator, "=") then
-				return Node.new(NodeVariant.Assign, {paths, explist("assignment")})
+				return Node.new(NodeVariant.Assign, {paths, assert(explist(), "Expected expression(s) for assignment")})
 			end
 			index = save
 		end
@@ -822,16 +826,20 @@ function Node:display()
 			local contents = map(data[2], function(kv)
 				if kv[1] then
 					if kv[1].variant == NodeVariant.Identifier then
-						return kv[1]:display() .. " = " .. kv[2]:display()
+						return kv[1]:display() .. " = " .. kv[2]:display():gsub("\n", "\n\t")
 					else
-						return "[" .. kv[1]:display() .. "] = " .. kv[2]:display()
+						return "[" .. kv[1]:display() .. "] = " .. kv[2]:display():gsub("\n", "\n\t")
 					end
 				else
 					return kv[2]:display()
 				end
 			end)
 
-			return "{" .. concat(contents, ",") .. "}"
+			if #contents < 5 then
+				return "{}"
+			else
+				return "{\n\t" .. concat(contents, ",\n\t") .. "\n}"
+			end
 		elseif data[1] == "string" then ---@cast data { [1]: string, [2]: Token<string> }
 			return fmt("%q", data[2].data)
 		elseif data[1] == "..." then
@@ -840,8 +848,12 @@ function Node:display()
 			return tostring(data[2].data)
 		end
 	elseif variant == NodeVariant.Lambda then ---@cast data { [1]: Token<string>[], [2]: Node }
-		local params = map(data[1], function(t) return t.data end)
-		return fmt("function(%s)\n\t%s\nend", concat(params, ", "), data[2]:display():gsub("\n", "\n\t"))
+		local params = map(data[1], function(t) return t.data or "..." end)
+		if #data[2].data == 0 then
+			return fmt("function(%s) end", concat(params, ", "))
+		else
+			return fmt("function(%s)\n\t%s\nend", concat(params, ", "), data[2]:display():gsub("\n", "\n\t"))
+		end
 	elseif variant == NodeVariant.Identifier then ---@cast data Token<string>
 		return data.data
 	end
