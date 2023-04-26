@@ -61,9 +61,10 @@ local function tokenize(src)
 	end
 
 	---@param pattern string
+	---@param ws boolean?
 	---@return string?
-	local function consume(pattern)
-		skipWhitespace()
+	local function consume(pattern, ws)
+		if not ws then skipWhitespace() end
 		local _, ed, match = src:find(pattern, ptr)
 
 		if ed then
@@ -124,12 +125,14 @@ local function tokenize(src)
 		end
 
 		repeat
-			local unicode = consume("^([%z\x01-\x7F\xC2-\xF4][\x80-\xBF]*)") -- utf8.charpattern
+			local unicode = consume("^([%z\x01-\x7F\xC2-\xF4][\x80-\xBF]*)", true) -- utf8.charpattern
 			if not unicode then break end
-			if string.byte(unicode) < 128 and unicode:match("^[^%w]") then -- Ascii symbol
+
+			if string.byte(unicode) < 128 and unicode:match("^[^%w_]") then -- Ascii symbol
 				ptr = ptr - 1
 				break
 			end
+
 			buffer[#buffer + 1] = unicode
 		until ptr >= len
 
@@ -157,7 +160,7 @@ local function tokenize(src)
 			return Token.new(TokenVariant.Operator, op)
 		end
 
-		local op = consume("^([%+%-%*%/%%=%^%<%>%#])")
+		local op = consume("^([%+%-%*%/%%=%^%<%>%#%!])")
 		if op then
 			return Token.new(TokenVariant.Operator, op)
 		end
@@ -378,7 +381,7 @@ local function parse(tokens)
 		local p = prim() or prefixexp() or tableconstructor()
 
 		if not p then
-			if consume(TokenVariant.Operator, "not") then
+			if consume(TokenVariant.Operator, "not") or consume(TokenVariant.Operator, "!") then
 				return Node.new(NodeVariant.Not, expr())
 			elseif consume(TokenVariant.Operator, "-") then
 				return Node.new(NodeVariant.Negate, expr())
