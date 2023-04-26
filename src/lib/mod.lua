@@ -61,10 +61,8 @@ local function tokenize(src)
 	end
 
 	---@param pattern string
-	---@param ws boolean?
 	---@return string?
-	local function consume(pattern, ws)
-		if not ws then skipWhitespace() end
+	local function consume(pattern)
 		local _, ed, match = src:find(pattern, ptr)
 
 		if ed then
@@ -74,6 +72,8 @@ local function tokenize(src)
 	end
 
 	local function next()
+		skipWhitespace()
+
 		local comment, data = consume("^%-%-"), consume("^%[(=*)%[")
 		if data then
 			local ending_part = "]" .. ("="):rep(#data) .. "]"
@@ -109,23 +109,9 @@ local function tokenize(src)
 			return Token.new(TokenVariant.Integer, tonumber(data))
 		end
 
-		local data, buffer = consume("^([%w_]+)"), {}
-		if data then
-			if Keywords[data] then
-				return Token.new(TokenVariant.Keyword, data)
-			elseif data == "true" or data == "false" then
-				return Token.new(TokenVariant.Boolean, data == "true")
-			elseif data == "nil" then
-				return Token.new(TokenVariant.Nil, nil)
-			elseif data == "and" or data == "or" or data == "not" then
-				return Token.new(TokenVariant.Operator, data)
-			else
-				buffer[#buffer + 1] = data
-			end
-		end
-
+		local buffer = {} -- Identifier / Keywords support unicode
 		repeat
-			local unicode = consume("^([%z\x01-\x7F\xC2-\xF4][\x80-\xBF]*)", true) -- utf8.charpattern
+			local unicode = consume("^([%z\x01-\x7F\xC2-\xF4][\x80-\xBF]*)") -- utf8.charpattern
 			if not unicode then break end
 
 			if string.byte(unicode) < 128 and unicode:match("^[^%w_]") then -- Ascii symbol
@@ -136,8 +122,19 @@ local function tokenize(src)
 			buffer[#buffer + 1] = unicode
 		until ptr >= len
 
-		if #buffer ~= 0 then
-			return Token.new(TokenVariant.Identifier, table.concat(buffer))
+		if #buffer > 0 then
+			local data = table.concat(buffer)
+			if Keywords[data] then
+				return Token.new(TokenVariant.Keyword, data)
+			elseif data == "true" or data == "false" then
+				return Token.new(TokenVariant.Boolean, data == "true")
+			elseif data == "nil" then
+				return Token.new(TokenVariant.Nil, nil)
+			elseif data == "and" or data == "or" or data == "not" then
+				return Token.new(TokenVariant.Operator, data)
+			else
+				return Token.new(TokenVariant.Identifier, data)
+			end
 		end
 
 		local data = consume('^\"([^\"]*)\"') -- Todo: Escapes
@@ -155,7 +152,7 @@ local function tokenize(src)
 			return Token.new(TokenVariant.Label, data)
 		end
 
-		local op = consume("^([~=><]=)")
+		local op = consume("^([!~=><]=)")
 		if op then
 			return Token.new(TokenVariant.Operator, op)
 		end
@@ -451,7 +448,7 @@ local function parse(tokens)
 			return Node.new(NodeVariant.GreaterThanEq, { p, expr() })
 		elseif consume(TokenVariant.Operator, "==") then
 			return Node.new(NodeVariant.Equals, { p, expr() })
-		elseif consume(TokenVariant.Operator, "~=") then
+		elseif consume(TokenVariant.Operator, "~=") or consume(TokenVariant.Operator, "!=") then
 			return Node.new(NodeVariant.NotEquals, { p, expr() })
 		end
 
@@ -623,6 +620,8 @@ local function parse(tokens)
 			return Node.new(NodeVariant.Repeat, { assert(block("until"), "Expected block after repeat"), expr() })
 		elseif consume(TokenVariant.Keyword, "break") then
 			return Node.new(NodeVariant.Break, nil)
+		elseif consume(TokenVariant.Identifier, "continue") then
+			return Node.new(NodeVariant.Goto, Token.new(TokenVariant.Label, "__continue__"))
 		elseif consume(TokenVariant.Keyword, "function") then
 			local path = {} ---@type { [1]: boolean, [2]: Token<string> }[]
 			repeat
