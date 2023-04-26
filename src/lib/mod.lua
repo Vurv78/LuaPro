@@ -166,6 +166,10 @@ local function tokenize(src)
 			return Token.new(TokenVariant.Vararg, nil)
 		elseif consume("^%.%.") then
 			return Token.new(TokenVariant.Operator, "..")
+		elseif consume("^&&") then
+			return Token.new(TokenVariant.Operator, "&&")
+		elseif consume("^||") then
+			return Token.new(TokenVariant.Operator, "||")
 		end
 
 		local grammar = consume("^([%(%)%{%}%[%]%,%.%;%:])")
@@ -434,9 +438,9 @@ local function parse(tokens)
 			return Node.new(NodeVariant.Pow, { p, expr() })
 		elseif consume(TokenVariant.Operator, "..") then
 			return Node.new(NodeVariant.Concat, { p, expr() })
-		elseif consume(TokenVariant.Operator, "or") then
+		elseif consume(TokenVariant.Operator, "or") or consume(TokenVariant.Operator, "||") then
 			return Node.new(NodeVariant.Or, { p, expr() })
-		elseif consume(TokenVariant.Operator, "and") then
+		elseif consume(TokenVariant.Operator, "and") or consume(TokenVariant.Operator, "&&") then
 			return Node.new(NodeVariant.And, { p, expr() })
 		elseif consume(TokenVariant.Operator, "<") then
 			return Node.new(NodeVariant.LessThan, { p, expr() })
