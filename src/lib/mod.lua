@@ -108,7 +108,7 @@ local function tokenize(src)
 			return Token.new(TokenVariant.Integer, tonumber(data))
 		end
 
-		local data = consume("^([%w_]+)")
+		local data, buffer = consume("^([%w_]+)"), {}
 		if data then
 			if Keywords[data] then
 				return Token.new(TokenVariant.Keyword, data)
@@ -119,8 +119,22 @@ local function tokenize(src)
 			elseif data == "and" or data == "or" or data == "not" then
 				return Token.new(TokenVariant.Operator, data)
 			else
-				return Token.new(TokenVariant.Identifier, data)
+				buffer[#buffer + 1] = data
 			end
+		end
+
+		repeat
+			local unicode = consume("^([%z\x01-\x7F\xC2-\xF4][\x80-\xBF]*)") -- utf8.charpattern
+			if not unicode then break end
+			if string.byte(unicode) < 128 and unicode:match("^[^%w]") then -- Ascii symbol
+				ptr = ptr - 1
+				break
+			end
+			buffer[#buffer + 1] = unicode
+		until ptr >= len
+
+		if #buffer ~= 0 then
+			return Token.new(TokenVariant.Identifier, table.concat(buffer))
 		end
 
 		local data = consume('^\"([^\"]*)\"') -- Todo: Escapes
