@@ -5,7 +5,16 @@
 
 --#region tokenizer
 
+---@alias Version "Lua 5.1"|"Lua 5.4"|"Lua 5.3"|"Lua 5.2"|"Garry's Mod"|"LuaJIT 2.1"
 local UTF8_PATTERN = _VERSION == "Lua 5.1" and "^([%z\x01-\x7F\xC2-\xF4][\x80-\xBF]*)" or "^([\0\x01-\x7F\xC2-\xF4][\x80-\xBF]*)" -- utf8.charpattern
+
+---@generic T
+---@param v T?
+---@return T
+local function assert(v, msg)
+	if not v then error(msg) end
+	return v
+end
 
 ---@class Token<T>: { data: T, variant: TokenVariant }
 ---@field variant TokenVariant
@@ -13,11 +22,10 @@ local UTF8_PATTERN = _VERSION == "Lua 5.1" and "^([%z\x01-\x7F\xC2-\xF4][\x80-\x
 local Token = {}
 Token.__index = Token
 
----@param variant TokenVariant
 ---@generic T
 ---@param data T
 ---@return Token<T>
-function Token.new(variant, data)
+function Token.new(variant --[[@param variant TokenVariant]], data)
 	return setmetatable({ variant = variant, data = data }, Token)
 end
 
@@ -52,12 +60,9 @@ local Keywords = {
 	["break"] = true
 }
 
----@param src string
----@param version "Lua 5.1"|"Lua 5.4"|"Lua 5.3"|"Lua 5.2"|"Garry's Mod"|"LuaJIT 2.1"|nil
----@return Token[]
-local function tokenize(src, version)
+local function tokenize(src --[[@param src string]], version --[[@param version Version]]) ---@return Token[]
 	version = version or _VERSION
-	local unicode, attributes, c_ops, binary_literals = (version == "Garry's Mod" or version >= "LuaJIT 2.1"), version >= "Lua 5.4", version == "Garry's Mod", (version == "Garry's Mod" or version == "LuaJIT 2.1")
+	local unicode, has_attributes, c_ops, binary_literals = (version == "Garry's Mod" or version >= "LuaJIT 2.1"), version >= "Lua 5.4", version == "Garry's Mod", (version == "Garry's Mod" or version == "LuaJIT 2.1")
 
 	local ptr, len = 1, #src
 
@@ -69,8 +74,7 @@ local function tokenize(src, version)
 	end
 
 	---@param pattern string
-	---@return string?
-	local function consume(pattern)
+	local function consume(pattern) ---@return string?
 		local _, ed, match = src:find(pattern, ptr)
 
 		if ed then
@@ -175,9 +179,11 @@ local function tokenize(src, version)
 			return Token.new(TokenVariant.Label, data)
 		end
 
-		local data = attributes and consume("^<(%w+)>")
-		if data then
-			return Token.new(TokenVariant.Attribute, data)
+		if has_attributes then
+			local data = consume("^<(%w+)>")
+			if data then
+				return Token.new(TokenVariant.Attribute, data)
+			end
 		end
 
 		local op = consume(logical_ops_pattern)
@@ -239,7 +245,6 @@ Node.__index = Node
 
 ---@param variant NodeVariant
 ---@param data any
----@return Node
 function Node.new(variant, data)
 	return setmetatable({ variant = variant, data = data }, Node)
 end
@@ -278,10 +283,13 @@ Node.Variant = NodeVariant
 ---@alias Scope { labels: table<string, boolean>, pending_gotos: table<string, Token> }
 
 ---@param tokens Token[]
----@return Node
-local function parse(tokens)
-	local index, len = 1, #tokens
+---@param version Version?
+local function parse(tokens, version)
+	version = version or _VERSION
 
+	local has_continue, c_ops = version == "Garry's Mod", version == "Garry's Mod"
+
+	local index, len = 1, #tokens
 	local scopes, scopeid = {}, 1 ---@type Scope[], integer # Scoping for labels, variadic functions
 
 	local function pushScope()
@@ -298,12 +306,11 @@ local function parse(tokens)
 		scopes[scopeid], scopeid = nil, scopeid - 1
 	end
 
+	---@overload fun(variant: TokenVariant): Token?
 	---@generic T
 	---@param variant TokenVariant
 	---@param data T
-	---@return Token<T>?
-	---@overload fun(variant: TokenVariant): Token?
-	local function consume(variant, data)
+	local function consume(variant, data) ---@return Token<T>?
 		local p = tokens[index]
 		if p and p.variant == variant then
 			if data ~= nil and p.data ~= data then
@@ -315,12 +322,11 @@ local function parse(tokens)
 	end
 
 	---@param variant TokenVariant
-	---@return boolean
 	local function peek(variant)
 		return tokens[index] and tokens[index].variant == variant
 	end
 
-	local arguments, parameters, stmt, expr, block, namelist, varlist, explist
+	local arguments, parameters, stmt, expr, block, varlist, explist
 	local function prim()
 		local n = consume(TokenVariant.Nil)
 		if n then
@@ -334,12 +340,12 @@ local function parse(tokens)
 
 		local n = consume(TokenVariant.Integer) or consume(TokenVariant.Hexadecimal) or consume(TokenVariant.Binary)
 		if n then
-			return Node.new(NodeVariant.Literal, { "int", n })
+			return Node.new(NodeVariant.Literal, { "integer", n })
 		end
 
 		local n = consume(TokenVariant.Decimal)
 		if n then
-			return Node.new(NodeVariant.Literal, { "float", n })
+			return Node.new(NodeVariant.Literal, { "decimal", n })
 		end
 
 		local str = consume(TokenVariant.String) or consume(TokenVariant.MString)
@@ -349,7 +355,7 @@ local function parse(tokens)
 
 		local vararg = consume(TokenVariant.Vararg)
 		if vararg then
-			return Node.new(NodeVariant.Literal, { "...", vararg })
+			return Node.new(NodeVariant.Literal, { "vararg", vararg })
 		end
 
 		local fn = consume(TokenVariant.Keyword, "function")
@@ -410,11 +416,29 @@ local function parse(tokens)
 		end
 	end
 
+	local function namelist(msg --[[@param msg string?]]) ---@return Token[]
+		local idents = {}
+		repeat
+			idents[#idents + 1] = assert(consume(TokenVariant.Identifier), "Expected identifier for " .. (msg or "parameter"))
+		until not consume(TokenVariant.Grammar, ",")
+		return idents
+	end
+
+	local function attnamelist(msg --[[@param msg string?]]) ---@return { [1]: Token, [2]: Token? }[]
+		local out = {}
+		repeat
+			out[#out + 1] = { assert(consume(TokenVariant.Identifier), "Expected identifier for " .. (msg or "parameter")), consume(TokenVariant.Attribute)}
+		until not consume(TokenVariant.Grammar, ",")
+		return out
+	end
+
+	local declnamelist = version >= "Lua 5.4" and attnamelist or namelist
+
 	function expr() -- nil | boolean | number | string | ... | function | prefixexp | tableconstructor | exp binop exp | unop exp
 		local p = prim() or prefixexp() or tableconstructor()
 
 		if not p then
-			if consume(TokenVariant.Operator, "not") or consume(TokenVariant.Operator, "!") then
+			if consume(TokenVariant.Operator, "not") or (c_ops and consume(TokenVariant.Operator, "!")) then
 				return Node.new(NodeVariant.Not, expr())
 			elseif consume(TokenVariant.Operator, "-") then
 				return Node.new(NodeVariant.Negate, expr())
@@ -470,9 +494,9 @@ local function parse(tokens)
 			return Node.new(NodeVariant.Pow, { p, expr() })
 		elseif consume(TokenVariant.Operator, "..") then
 			return Node.new(NodeVariant.Concat, { p, expr() })
-		elseif consume(TokenVariant.Operator, "or") or consume(TokenVariant.Operator, "||") then
+		elseif consume(TokenVariant.Operator, "or") or (c_ops and consume(TokenVariant.Operator, "||")) then
 			return Node.new(NodeVariant.Or, { p, expr() })
-		elseif consume(TokenVariant.Operator, "and") or consume(TokenVariant.Operator, "&&") then
+		elseif consume(TokenVariant.Operator, "and") or (c_ops and consume(TokenVariant.Operator, "&&")) then
 			return Node.new(NodeVariant.And, { p, expr() })
 		elseif consume(TokenVariant.Operator, "<") then
 			return Node.new(NodeVariant.LessThan, { p, expr() })
@@ -484,7 +508,7 @@ local function parse(tokens)
 			return Node.new(NodeVariant.GreaterThanEq, { p, expr() })
 		elseif consume(TokenVariant.Operator, "==") then
 			return Node.new(NodeVariant.Equals, { p, expr() })
-		elseif consume(TokenVariant.Operator, "~=") or consume(TokenVariant.Operator, "!=") then
+		elseif consume(TokenVariant.Operator, "~=") or (c_ops and consume(TokenVariant.Operator, "!=")) then
 			return Node.new(NodeVariant.NotEquals, { p, expr() })
 		end
 
@@ -492,9 +516,7 @@ local function parse(tokens)
 	end
 
 
-	---@param ending "end"|"until"|"elseif"|"else"
-	---@return Node[]?
-	function block(ending)
+	function block(ending --[[@param ending string]]) ---@return Node[]?
 		local nodes, old = {}, index
 		pushScope()
 		while index <= len do
@@ -514,10 +536,7 @@ local function parse(tokens)
 		index = old
 	end
 
-	---@param msg string?
-	---@param ending string?
-	---@return Node[]
-	function arguments(msg, ending)
+	function arguments(msg --[[@param msg string?]], ending --[[@param ending string?]]) ---@return Node[]
 		local exprs = {}
 		if ending and consume(TokenVariant.Grammar, ending) then return exprs end
 		repeat
@@ -527,18 +546,7 @@ local function parse(tokens)
 		return exprs
 	end
 
-	---@param msg string?
-	---@return Token[]
-	function namelist(msg)
-		local idents = {}
-		repeat
-			idents[#idents + 1] = assert(consume(TokenVariant.Identifier), "Expected identifier for " .. (msg or "parameter"))
-		until not consume(TokenVariant.Grammar, ",")
-		return idents
-	end
-
-	---@return Node[]?
-	function explist()
+	function explist() ---@return Node[]?
 		local exprs, before = {}, index
 		repeat
 			local e = expr()
@@ -551,9 +559,9 @@ local function parse(tokens)
 		return exprs
 	end
 
-	---@return { [1]: Node, [2]: Node[] }?
-	local function var() -- Name | prefixexp "[" exp "]" | prefixexp "." Name
-		local ident, index = prefixexp()
+	--- `Name` | `prefixexp "[" exp "]"` | `prefixexp "." Name`
+	local function var() ---@return { [1]: Node, [2]: Node[] }?
+		local ident = prefixexp()
 		if not ident then return end
 
 		local chain, i = {}, 1 ---@type Node[]
@@ -572,9 +580,7 @@ local function parse(tokens)
 		return { ident, chain }
 	end
 
-	---@param msg string
-	---@return { [1]: Node, [2]: Node? }[]
-	function varlist(msg)
+	function varlist(msg --[[@param msg string]]) ---@return { [1]: Node, [2]: Node? }[]
 		local vars = {}
 		repeat
 			vars[#vars + 1] = assert(var(), "Expected identifier for " .. msg)
@@ -582,8 +588,7 @@ local function parse(tokens)
 		return vars
 	end
 
-	---@return Token[]?
-	function parameters()
+	function parameters() ---@return Token[]?
 		if not consume(TokenVariant.Grammar, "(") then return end
 		if consume(TokenVariant.Grammar, ")") then return {} end
 
@@ -683,7 +688,7 @@ local function parse(tokens)
 					assert(block("end"), "Expected block following function parameters")
 				})
 			else
-				local idents = namelist("local declaration")
+				local idents = declnamelist("local declaration")
 				if consume(TokenVariant.Operator, "=") then
 					return Node.new(NodeVariant.LocalAssign, { idents, assert(explist(), "Expected expression for local declaration") })
 				end
@@ -726,11 +731,8 @@ local function parse(tokens)
 	local nodes = {}
 	pushScope()
 	while index <= len do
-		local node = stmt()
-		assert(node, "Failed to parse: '" .. tostring(tokens[index]) .. "'")
-
+		nodes[#nodes + 1] = assert(stmt(), "Failed to parse: '" .. tostring(tokens[index]) .. "'")
 		while consume(TokenVariant.Grammar, ";") do end
-		nodes[#nodes + 1] = node
 	end
 	popScope()
 
@@ -743,12 +745,10 @@ end
 
 local fmt, concat, ipairs = string.format, table.concat, ipairs
 
----@generic T
----@generic T2
+---@generic T, T2
 ---@param tbl T[]
 ---@param fn fun(t: T): T2
----@return T2[]
-local function map(tbl, fn)
+local function map(tbl, fn) ---@return T2[]
 	local out = {}
 	for i, v in ipairs(tbl) do
 		out[i] = fn(v)
@@ -756,17 +756,14 @@ local function map(tbl, fn)
 	return out
 end
 
-local format
+local format ---@type fun(node: Node): string
 
----@param node Node
----@return string
-local function block(node)
+local function block(node --[[@param node Node]])
 	if #node.data == 0 then return " " end
 	return "\n\t" .. format(node):gsub("\n", "\n\t") .. "\n"
 end
 
----@param node Node
-function format(node)
+function format(node --[[@param node Node]]) ---@return string
 	local variant, data = node.variant, node.data
 	if variant == NodeVariant.Chunk then ---@cast data Node[]
 		return concat(map(data, format), "\n")
@@ -904,7 +901,7 @@ function format(node)
 			end
 		elseif data[1] == "string" then ---@cast data { [1]: string, [2]: Token<string> }
 			return fmt("%q", data[2].data)
-		elseif data[1] == "..." then
+		elseif data[1] == "vararg" then
 			return "..."
 		else ---@cast data { [1]: string, [2]: Token<string> }
 			return tostring(data[2].data)
