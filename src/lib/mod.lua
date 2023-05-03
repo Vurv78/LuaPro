@@ -5,6 +5,8 @@
 
 --#region tokenizer
 
+local UTF8_PATTERN = _VERSION == "Lua 5.1" and "^([%z\x01-\x7F\xC2-\xF4][\x80-\xBF]*)" or "^([\0\x01-\x7F\xC2-\xF4][\x80-\xBF]*)" -- utf8.charpattern
+
 ---@class Token<T>: { data: T, variant: TokenVariant }
 ---@field variant TokenVariant
 ---@field data unknown # Default generic T = unknown
@@ -25,17 +27,19 @@ end
 
 ---@enum TokenVariant
 local TokenVariant = {
-	Keyword = 1, Identifier = 2,
+	Identifier = 1,
 
-	String = 3, MString = 4,
-	Comment = 5, MComment = 6,
+	String = 2, MString = 3,
+	Comment = 4, MComment = 5,
 
-	Integer = 7, Decimal = 8,
-	Hexadecimal = 9, Binary = 10,
+	Integer = 6, Decimal = 7,
+	Hexadecimal = 8, Binary = 9, --[[LuaJIT 2.1]]
 
-	Boolean = 11, Nil = 12,
-	Operator = 13, Grammar = 14,
-	Vararg = 15, Label = 16
+	Boolean = 10, Nil = 11,
+
+	Keyword = 12, Operator = 13, Grammar = 14,
+	Vararg = 15, Label = 16,
+	Attribute = 17 --[[Lua 5.4]]
 }
 
 Token.Variant = TokenVariant
@@ -49,8 +53,12 @@ local Keywords = {
 }
 
 ---@param src string
+---@param version "Lua 5.1"|"Lua 5.4"|"Lua 5.3"|"Lua 5.2"|"Garry's Mod"|"LuaJIT 2.1"|nil
 ---@return Token[]
-local function tokenize(src)
+local function tokenize(src, version)
+	version = version or _VERSION
+	local unicode, attributes, c_ops, binary_literals = (version == "Garry's Mod" or version >= "LuaJIT 2.1"), version >= "Lua 5.4", version == "Garry's Mod", (version == "Garry's Mod" or version == "LuaJIT 2.1")
+
 	local ptr, len = 1, #src
 
 	local function skipWhitespace()
@@ -70,6 +78,9 @@ local function tokenize(src)
 			return match or true
 		end
 	end
+
+	local ops_pattern = c_ops and "^([%+%-%*%/%%=%^%<%>%#!])" or "^([%+%-%*%/%%=%^%<%>%#])"
+	local logical_ops_pattern = c_ops and "^([!~=><]=)" or "^([~=><]=)"
 
 	local function next()
 		skipWhitespace()
@@ -99,7 +110,7 @@ local function tokenize(src)
 			return Token.new(TokenVariant.Hexadecimal, tonumber(data, 16))
 		end
 
-		local data = consume("^0b([01]+)")
+		local data = binary_literals and consume("^0b([01]+)")
 		if data then
 			return Token.new(TokenVariant.Binary, tonumber(data, 2))
 		end
@@ -109,18 +120,22 @@ local function tokenize(src)
 			return Token.new(TokenVariant.Integer, tonumber(data))
 		end
 
-		local buffer = {} -- Identifier / Keywords support unicode
-		repeat
-			local unicode = consume("^([%z\x01-\x7F\xC2-\xF4][\x80-\xBF]*)") -- utf8.charpattern
-			if not unicode then break end
+		local buffer = {}
+		if unicode then -- Identifier / Keywords support unicode in LuaJIT
+			repeat
+				local unicode = consume(UTF8_PATTERN)
+				if not unicode then break end
 
-			if string.byte(unicode) < 128 and unicode:match("^[^%w_]") then -- Ascii symbol
-				ptr = ptr - 1
-				break
-			end
+				if string.byte(unicode) < 128 and unicode:match("^[^%w_]") then -- Ascii symbol
+					ptr = ptr - 1
+					break
+				end
 
-			buffer[#buffer + 1] = unicode
-		until ptr >= len
+				buffer[#buffer + 1] = unicode
+			until ptr >= len
+		else
+			buffer[1] = consume("^([%w_]+)")
+		end
 
 		if #buffer > 0 then
 			local data = table.concat(buffer)
@@ -138,6 +153,14 @@ local function tokenize(src)
 		end
 
 		local data = consume('^\"([^\"]*)\"') -- Todo: Escapes
+		--[[local quot = consume("^(['\"])")
+		if quot then
+			repeat
+				local inner, escapes = consume("^([^\\" .. quot .. "]*)(\\*)" .. quot)
+				print(inner, escapes and #escapes or 0)
+			until ptr >= len
+		end]]
+
 		if data then
 			return Token.new(TokenVariant.String, data)
 		end
@@ -152,24 +175,33 @@ local function tokenize(src)
 			return Token.new(TokenVariant.Label, data)
 		end
 
-		local op = consume("^([!~=><]=)")
+		local data = attributes and consume("^<(%w+)>")
+		if data then
+			return Token.new(TokenVariant.Attribute, data)
+		end
+
+		local op = consume(logical_ops_pattern)
 		if op then
 			return Token.new(TokenVariant.Operator, op)
 		end
 
-		local op = consume("^([%+%-%*%/%%=%^%<%>%#%!])")
+		local op = consume(ops_pattern)
 		if op then
 			return Token.new(TokenVariant.Operator, op)
+		elseif c_ops then -- Garry's Mod operators support
+			if consume("^&&") then
+				return Token.new(TokenVariant.Operator, "&&")
+			elseif consume("^||") then
+				return Token.new(TokenVariant.Operator, "||")
+			elseif consume("^!") then
+				return Token.new(TokenVariant.Operator, "!")
+			end
 		end
 
 		if consume("^%.%.%.") then
 			return Token.new(TokenVariant.Vararg, nil)
 		elseif consume("^%.%.") then
 			return Token.new(TokenVariant.Operator, "..")
-		elseif consume("^&&") then
-			return Token.new(TokenVariant.Operator, "&&")
-		elseif consume("^||") then
-			return Token.new(TokenVariant.Operator, "||")
 		end
 
 		local grammar = consume("^([%(%)%{%}%[%]%,%.%;%:])")
@@ -597,7 +629,7 @@ local function parse(tokens)
 			else
 				error("Expected '=' operator or 'in' keyword to follow for loop identifier(s)")
 			end
-		elseif consume(TokenVariant.Keyword, "if") then -- todo: elseif / else
+		elseif consume(TokenVariant.Keyword, "if") then
 			local chain = {} ---@type { [1]: Node?, [2]: Node }
 			while true do
 				local cond = assert(expr(), "Expected condition for if statement")
@@ -624,7 +656,7 @@ local function parse(tokens)
 			return Node.new(NodeVariant.Repeat, { assert(block("until"), "Expected block after repeat"), expr() })
 		elseif consume(TokenVariant.Keyword, "break") then
 			return Node.new(NodeVariant.Break, nil)
-		elseif consume(TokenVariant.Identifier, "continue") then
+		elseif has_continue and consume(TokenVariant.Identifier, "continue") then
 			return Node.new(NodeVariant.Goto, Token.new(TokenVariant.Label, "__continue__"))
 		elseif consume(TokenVariant.Keyword, "function") then
 			local path = {} ---@type { [1]: boolean, [2]: Token<string> }[]
@@ -724,26 +756,29 @@ local function map(tbl, fn)
 	return out
 end
 
+local format
+
 ---@param node Node
 ---@return string
 local function block(node)
 	if #node.data == 0 then return " " end
-	return "\n\t" .. node:display():gsub("\n", "\n\t") .. "\n"
+	return "\n\t" .. format(node):gsub("\n", "\n\t") .. "\n"
 end
 
-function Node:display()
-	local variant, data = self.variant, self.data
+---@param node Node
+function format(node)
+	local variant, data = node.variant, node.data
 	if variant == NodeVariant.Chunk then ---@cast data Node[]
-		return concat(map(data, Node.display), "\n")
+		return concat(map(data, format), "\n")
 	elseif variant == NodeVariant.Comment then ---@cast data string
 		return fmt("-- %s", data)
 	elseif variant == NodeVariant.If then
 		local first = table.remove(data, 1)
-		local first = fmt("if %s then%s", first[1]:display(), block(first[2]))
+		local first = fmt("if %s then%s", format(first[1]), block(first[2]))
 
 		local buf = map(data, function (chain)
 			if chain[1] then
-				return fmt("elseif %s then%s", chain[1]:display(), block(chain[2]))
+				return fmt("elseif %s then%s", format(chain[1]), block(chain[2]))
 			else
 				return "else" .. block(chain[2])
 			end
@@ -751,24 +786,24 @@ function Node:display()
 
 		return first .. concat(buf) .. "end"
 	elseif variant == NodeVariant.While then ---@cast data { [1]: Node, [2]: Node }
-		return fmt("while %s do%send", data[1]:display(), block(data[2]))
+		return fmt("while %s do%send", format(data[1]), block(data[2]))
 	elseif variant == NodeVariant.For then ---@cast data { [1]: "in"|"=" }
 		if data[1] == "in" then ---@cast data { [1]: "in"|"=", [2]: Token<string>[], [3]: Node[] }
-			local vars, vals = map(data[2], function(t) return t.data end), map(data[3], Node.display)
+			local vars, vals = map(data[2], function(t) return t.data end), map(data[3], format)
 			return fmt("for %s in %s do%send", concat(vars, ", "), concat(vals, ", "), block(data[4]))
 		else ---@cast data { [1]: "in"|"=", [2]: Token<string>[], [3]: Node, [4]: Node, [5]: Node?, [6]: Node }
 			local vars = map(data[2], function(t) return t.data end)
-			return fmt("for %s = %s, %s, %s do%send", concat(vars, ", "), data[3]:display(), data[4]:display(), data[5] and data[5]:display() or "1", block(data[6]))
+			return fmt("for %s = %s, %s, %s do%send", concat(vars, ", "), format(data[3]), format(data[4]), data[5] and format(data[5]) or "1", block(data[6]))
 		end
 	elseif variant == NodeVariant.Repeat then ---@cast data { [1]: Node, [2]: Node }
-		return fmt("repeat%suntil %s", block(data[1]), data[2]:display())
+		return fmt("repeat%suntil %s", block(data[1]), format(data[2]))
 	elseif variant == NodeVariant.Goto then ---@cast data Token<string>
 		return "goto " .. data.data
 	elseif variant == NodeVariant.Do then ---@cast data Node
 		return fmt("do%send", block(data))
 	elseif variant == NodeVariant.Return then ---@cast data Node[]?
 		if data then
-			return "return " .. concat(map(data, Node.display), ", ")
+			return "return " .. concat(map(data, format), ", ")
 		else
 			return "return"
 		end
@@ -786,79 +821,79 @@ function Node:display()
 		return "::" .. data.data .. "::"
 	elseif variant == NodeVariant.Assign then ---@cast data { [1]: { [1]: Node, [2]: Node[] }[], [2]: Node[] }
 		local vars = map(data[1], function(var)
-			local total = map(var[2], function(i) return "[" .. i:display() .. "]" end)
-			return var[1]:display() .. concat(total)
+			local total = map(var[2], function(i) return "[" .. format(i) .. "]" end)
+			return format(var[1]) .. concat(total)
 		end)
 
-		return fmt("%s = %s", concat(vars, ", "), concat(map(data[2], Node.display), ", "))
+		return fmt("%s = %s", concat(vars, ", "), concat(map(data[2], format), ", "))
 	elseif variant == NodeVariant.LocalAssign then ---@cast data { [1]: Token<string>[], [2]: Node[]? }
 		local idents = map(data[1], function(t) return t.data end)
 		if data[2] then -- actually assigning values.
-			return fmt("local %s = %s", concat(idents, ", "), concat(map(data[2], Node.display), ", "))
+			return fmt("local %s = %s", concat(idents, ", "), concat(map(data[2], format), ", "))
 		else
 			return fmt("local %s", concat(idents, ", "))
 		end
 	elseif variant == NodeVariant.Grouped then ---@cast data Node
-		return fmt("(%s)", data:display())
+		return fmt("(%s)", format(data))
 	elseif variant == NodeVariant.Addition then ---@cast data { [1]: Node, [2]: Node }
-		return fmt("%s + %s", data[1]:display(), data[2]:display())
+		return fmt("%s + %s", format(data[1]), format(data[2]))
 	elseif variant == NodeVariant.Subtraction then ---@cast data { [1]: Node, [2]: Node }
-		return fmt("%s - %s", data[1]:display(), data[2]:display())
+		return fmt("%s - %s", format(data[1]), format(data[2]))
 	elseif variant == NodeVariant.Multiply then ---@cast data { [1]: Node, [2]: Node }
-		return fmt("%s * %s", data[1]:display(), data[2]:display())
+		return fmt("%s * %s", format(data[1]), format(data[2]))
 	elseif variant == NodeVariant.Divide then ---@cast data { [1]: Node, [2]: Node }
-		return fmt("%s / %s", data[1]:display(), data[2]:display())
+		return fmt("%s / %s", format(data[1]), format(data[2]))
 	elseif variant == NodeVariant.Modulus then ---@cast data { [1]: Node, [2]: Node }
-		return fmt("%s %% %s", data[1]:display(), data[2]:display())
+		return fmt("%s %% %s", format(data[1]), format(data[2]))
 	elseif variant == NodeVariant.Pow then ---@cast data { [1]: Node, [2]: Node }
-		return fmt("%s ^ %s", data[1]:display(), data[2]:display())
+		return fmt("%s ^ %s", format(data[1]), format(data[2]))
 	elseif variant == NodeVariant.Concat then ---@cast data { [1]: Node, [2]: Node }
-		return fmt("%s .. %s", data[1]:display(), data[2]:display())
+		return fmt("%s .. %s", format(data[1]), format(data[2]))
 	elseif variant == NodeVariant.Call then ---@cast data { [1]: Node, [2]: Node[] }
-		local args = map(data[2], Node.display)
-		return fmt("%s(%s)", data[1]:display(), concat(args, ", "))
+		local args = map(data[2], format)
+		return fmt("%s(%s)", format(data[1]), concat(args, ", "))
 	elseif variant == NodeVariant.MethodCall then ---@cast data { [1]: Node, [2]: Token<string>, [3]: Node[] }
-		local args = map(data[3], Node.display)
-		return fmt("%s:%s(%s)", data[1]:display(), data[2].data, concat(args, ", "))
+		local args = map(data[3], format)
+		return fmt("%s:%s(%s)", format(data[1]), data[2].data, concat(args, ", "))
 	elseif variant == NodeVariant.Index then ---@cast data { [1]: Node, [2]: boolean, [3]: Node|Token }
 		if data[2] then ---@cast data { [1]: Node, [2]: boolean, [3]: Token<string> }
-			return fmt("%s.%s", data[1]:display(), data[3].data)
+			return fmt("%s.%s", format(data[1]), data[3].data)
 		else ---@cast data { [1]: Node, [2]: boolean, [3]: Node }
-			return fmt("%s[%s]", data[1]:display(), data[3]:display())
+			return fmt("%s[%s]", format(data[1]), format(data[3]))
 		end
 	elseif variant == NodeVariant.Or then ---@cast data { [1]: Node, [2]: Node }
-		return fmt("%s or %s", data[1]:display(), data[2]:display())
+		return fmt("%s or %s", format(data[1]), format(data[2]))
 	elseif variant == NodeVariant.And then ---@cast data { [1]: Node, [2]: Node }
-		return fmt("%s and %s", data[1]:display(), data[2]:display())
+		return fmt("%s and %s", format(data[1]), format(data[2]))
 	elseif variant == NodeVariant.Equals then ---@cast data { [1]: Node, [2]: Node }
-		return fmt("%s == %s", data[1]:display(), data[2]:display())
+		return fmt("%s == %s", format(data[1]), format(data[2]))
 	elseif variant == NodeVariant.NotEquals then ---@cast data { [1]: Node, [2]: Node }
-		return fmt("%s ~= %s", data[1]:display(), data[2]:display())
+		return fmt("%s ~= %s", format(data[1]), format(data[2]))
 	elseif variant == NodeVariant.LessThan then ---@cast data { [1]: Node, [2]: Node }
-		return fmt("%s < %s", data[1]:display(), data[2]:display())
+		return fmt("%s < %s", format(data[1]), format(data[2]))
 	elseif variant == NodeVariant.LessThanEq then ---@cast data { [1]: Node, [2]: Node }
-		return fmt("%s <= %s", data[1]:display(), data[2]:display())
+		return fmt("%s <= %s", format(data[1]), format(data[2]))
 	elseif variant == NodeVariant.GreaterThan then ---@cast data { [1]: Node, [2]: Node }
-		return fmt("%s > %s", data[1]:display(), data[2]:display())
+		return fmt("%s > %s", format(data[1]), format(data[2]))
 	elseif variant == NodeVariant.GreaterThanEq then ---@cast data { [1]: Node, [2]: Node }
-		return fmt("%s >= %s", data[1]:display(), data[2]:display())
+		return fmt("%s >= %s", format(data[1]), format(data[2]))
 	elseif variant == NodeVariant.Not then ---@cast data Node
-		return fmt("not %s", data:display())
+		return fmt("not %s", format(data))
 	elseif variant == NodeVariant.Negate then ---@cast data Node
-		return fmt("-%s", data:display())
+		return fmt("-%s", format(data))
 	elseif variant == NodeVariant.Length then ---@cast data Node
-		return fmt("#%s", data:display())
+		return fmt("#%s", format(data))
 	elseif variant == NodeVariant.Literal then
 		if data[1] == "table" then ---@cast data { [1]: string, [2]: { [1]: Node?, [2]: Node }[] }
 			local contents = map(data[2], function(kv)
 				if kv[1] then
 					if kv[1].variant == NodeVariant.Identifier then
-						return kv[1]:display() .. " = " .. kv[2]:display():gsub("\n", "\n\t")
+						return format(kv[1]) .. " = " .. format(kv[2]):gsub("\n", "\n\t")
 					else
-						return "[" .. kv[1]:display() .. "] = " .. kv[2]:display():gsub("\n", "\n\t")
+						return "[" .. format(kv[1]) .. "] = " .. format(kv[2]):gsub("\n", "\n\t")
 					end
 				else
-					return kv[2]:display()
+					return format(kv[2])
 				end
 			end)
 
@@ -892,6 +927,7 @@ end
 return {
 	tokenize = tokenize,
 	parse = parse,
+	format = format,
 
 	Token = Token,
 	Node = Node
