@@ -321,41 +321,21 @@ local function parse(tokens, version)
 		end
 	end
 
-	---@param variant TokenVariant
-	local function peek(variant)
+	local function peek(variant --[[@param variant TokenVariant]])
 		return tokens[index] and tokens[index].variant == variant
 	end
 
 	local arguments, parameters, stmt, expr, block, varlist, explist
 	local function prim()
-		local n = consume(TokenVariant.Nil)
-		if n then
-			return Node.new(NodeVariant.Literal, { "nil", n })
-		end
-
-		local bool = consume(TokenVariant.Boolean)
-		if bool then
-			return Node.new(NodeVariant.Literal, { "boolean", bool })
-		end
-
-		local n = consume(TokenVariant.Integer) or consume(TokenVariant.Hexadecimal) or consume(TokenVariant.Binary)
-		if n then
-			return Node.new(NodeVariant.Literal, { "integer", n })
-		end
-
-		local n = consume(TokenVariant.Decimal)
-		if n then
-			return Node.new(NodeVariant.Literal, { "decimal", n })
-		end
-
-		local str = consume(TokenVariant.String) or consume(TokenVariant.MString)
-		if str then
-			return Node.new(NodeVariant.Literal, { "string", str })
-		end
-
-		local vararg = consume(TokenVariant.Vararg)
-		if vararg then
-			return Node.new(NodeVariant.Literal, { "vararg", vararg })
+		for variant in ipairs {
+			TokenVariant.Nil, TokenVariant.Boolean,
+			TokenVariant.Integer, TokenVariant.Hexadecimal, TokenVariant.Binary, TokenVariant.Decimal,
+			TokenVariant.String, TokenVariant.Vararg
+		} do
+			local val = consume(variant)
+			if val then
+				return Node.new(NodeVariant.Literal, { variant, val })
+			end
 		end
 
 		local fn = consume(TokenVariant.Keyword, "function")
@@ -480,36 +460,20 @@ local function parse(tokens, version)
 			end
 		end
 
-		if consume(TokenVariant.Operator, "+") then
-			return Node.new(NodeVariant.Addition, { p, expr() })
-		elseif consume(TokenVariant.Operator, "-") then
-			return Node.new(NodeVariant.Subtraction, { p, expr() })
-		elseif consume(TokenVariant.Operator, "*") then
-			return Node.new(NodeVariant.Multiply, { p, expr() })
-		elseif consume(TokenVariant.Operator, "/") then
-			return Node.new(NodeVariant.Divide, { p, expr() })
-		elseif consume(TokenVariant.Operator, "%") then
-			return Node.new(NodeVariant.Modulus, { p, expr() })
-		elseif consume(TokenVariant.Operator, "^") then
-			return Node.new(NodeVariant.Pow, { p, expr() })
-		elseif consume(TokenVariant.Operator, "..") then
-			return Node.new(NodeVariant.Concat, { p, expr() })
-		elseif consume(TokenVariant.Operator, "or") or (c_ops and consume(TokenVariant.Operator, "||")) then
-			return Node.new(NodeVariant.Or, { p, expr() })
-		elseif consume(TokenVariant.Operator, "and") or (c_ops and consume(TokenVariant.Operator, "&&")) then
-			return Node.new(NodeVariant.And, { p, expr() })
-		elseif consume(TokenVariant.Operator, "<") then
-			return Node.new(NodeVariant.LessThan, { p, expr() })
-		elseif consume(TokenVariant.Operator, "<=") then
-			return Node.new(NodeVariant.LessThanEq, { p, expr() })
-		elseif consume(TokenVariant.Operator, ">") then
-			return Node.new(NodeVariant.GreaterThan, { p, expr() })
-		elseif consume(TokenVariant.Operator, ">=") then
-			return Node.new(NodeVariant.GreaterThanEq, { p, expr() })
-		elseif consume(TokenVariant.Operator, "==") then
-			return Node.new(NodeVariant.Equals, { p, expr() })
-		elseif consume(TokenVariant.Operator, "~=") or (c_ops and consume(TokenVariant.Operator, "!=")) then
-			return Node.new(NodeVariant.NotEquals, { p, expr() })
+		for op, variant in pairs {
+			["+"] = NodeVariant.Addition, ["-"] = NodeVariant.Subtraction,
+			["*"] = NodeVariant.Multiply, ["/"] = NodeVariant.Divide,
+			["%"] = NodeVariant.Modulus, ["^"] = NodeVariant.Pow,
+			[".."] = NodeVariant.Concat, ["or"] = NodeVariant.Or,
+			["and"] = NodeVariant.And, ["<"] = NodeVariant.LessThan,
+			["<="] = NodeVariant.LessThanEq, [">"] = NodeVariant.GreaterThan,
+			[">="] = NodeVariant.GreaterThanEq, ["=="] = NodeVariant.Equals,
+			["~="] = NodeVariant.NotEquals, ["!="] = NodeVariant.NotEquals,
+			["||"] = NodeVariant.Or, ["&&"] = NodeVariant.And -- Yes, C operators are included, but I'm assuming people will properly pass tokens with the same version.
+		} do
+			if consume(TokenVariant.Operator, op) then
+				return Node.new(variant, { p, expr() })
+			end
 		end
 
 		return p
