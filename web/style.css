@@ -1,6 +1,6 @@
 html {
-	background-color: rgb(40, 43, 43);
 	overflow: hidden;
+	background-color: #3c3c3c;
 }
 
 div.editors {
@@ -8,13 +8,24 @@ div.editors {
 	height: 90vh;
 }
 
+div.header {
+	width: 100%;
+	height: 6vh;
+
+	color: white;
+	font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+	font-weight: bold;
+	font-size: 25px;
+}
+
 textarea {
 	resize: none;
 	user-select: none;
 
-	background-color: #5b525200;
 	outline: none;
-	color: rgb(171, 171, 171);
+	background-color: #272727;
+	color: #cecece;
+	font-size: 20px;
 }
 
 textarea#editor {
@@ -31,13 +42,15 @@ textarea#output {
 }
 
 select {
-	background-color: rgb(77, 129, 233);
+	outline: none;
+	background-color: #2869ed;
 	color: white;
-	font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-	font-size: 20px;
+	font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+	font-weight: bold;
+	font-size: 25px;
 
-	width: 20%;
-	height: 5vh;
+	width: 30%;
 	border-radius: 5px;
-	margin-right: 50px;
+	border: none;
+	margin-right: 5%;
 }

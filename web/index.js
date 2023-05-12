@@ -39,25 +39,41 @@ function Playground() {
 	fengari.lua.lua_pop(fengari.L, 1);
 
 	return html`
-		<div class="editors">
-			<textarea id="editor" onkeydown=${AllowTabs} onkeyup=${e=> setCode(e.target.value)}>${DEFAULT_CODE}</textarea>
-			<textarea id="output" readonly>${output}</textarea>
+		<div class="header">
+			<select name="mode" onchange=${e=> setMode(e.target.value)}>
+				<option value="Formatter">Formatter</option>
+				<option value="Tokens">Tokens</option>
+				<option value="AST">AST</option>
+			</select>
+
+			<select name="version" onchange=${e=> setVersion(e.target.value)}>
+				<option value="Lua 5.1">Lua 5.1</option>
+				<option value="Lua 5.2">Lua 5.2</option>
+				<option value="Lua 5.3">Lua 5.3</option>
+				<option value="Lua 5.4">Lua 5.4</option>
+				<option value="LuaJIT 2.1">LuaJIT 2.1</option>
+				<option value="Garry's Mod">Garry's Mod</option>
+			</select>
 		</div>
 
-		<select name="mode" onchange=${e=> setMode(e.target.value)}>
-			<option value="Formatter">Formatter</option>
-			<option value="Tokens">Tokens</option>
-			<option value="AST">AST</option>
-		</select>
+		<div class="editors">
+			<textarea
+				id="editor"
+				onkeydown=${AllowTabs}
+				onkeyup=${e=> setCode(e.target.value)}
+				aria-label="Lua code editor"
+			>
+				${DEFAULT_CODE}
+			</textarea>
 
-		<select name="version" onchange=${e=> setVersion(e.target.value)}>
-			<option value="Lua 5.1">Lua 5.1</option>
-			<option value="Lua 5.2">Lua 5.2</option>
-			<option value="Lua 5.3">Lua 5.3</option>
-			<option value="Lua 5.4">Lua 5.4</option>
-			<option value="LuaJIT 2.1">LuaJIT 2.1</option>
-			<option value="Garry's Mod">Garry's Mod</option>
-		</select>
+			<textarea
+				id="output"
+				aria-label="Output data, either formatted code, an AST, or a list of Tokens"
+				readonly
+			>
+				${output}
+			</textarea>
+		</div>
 	`;
 }
 
