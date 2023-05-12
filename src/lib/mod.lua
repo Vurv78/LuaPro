@@ -141,7 +141,7 @@ local function tokenize(src --[[@param src string]], version --[[@param version 
 				end
 
 				buffer[#buffer + 1] = unicode
-			until ptr >= len
+			until ptr > len
 		else
 			buffer[1] = consume("^([%a_][%w_]*)")
 		end
