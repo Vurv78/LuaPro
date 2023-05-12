@@ -96,7 +96,7 @@ local function tokenize(src --[[@param src string]], version --[[@param version 
 			if start then
 				local inner = src:sub(ptr, start - 1)
 				ptr = ed + 1
-				return Token.new(comment and TokenVariant.MComment or TokenVariant.MString, inner)
+				return Token.new(comment and TokenVariant.MComment or TokenVariant.MString, { inner, #data })
 			else
 				error("Missing " .. ending_part .. " to end multiline " .. (comment and "comment" or "string"))
 			end
@@ -327,7 +327,7 @@ local function parse(tokens, version)
 		for _, variant in ipairs {
 			TokenVariant.Nil, TokenVariant.Boolean,
 			TokenVariant.Integer, TokenVariant.Hexadecimal, TokenVariant.Binary, TokenVariant.Decimal,
-			TokenVariant.String, TokenVariant.Vararg
+			TokenVariant.MString, TokenVariant.String, TokenVariant.Vararg
 		} do
 			local val = consume(variant)
 			if val then
@@ -443,7 +443,7 @@ local function parse(tokens, version)
 			elseif p and p.variant == NodeVariant.Identifier then
 				local str = consume(TokenVariant.String) or consume(TokenVariant.MString)
 				if str then
-					p = Node.new(NodeVariant.Call, { p, { Node.new(NodeVariant.Literal, { TokenVariant.String, str }) } })
+					p = Node.new(NodeVariant.Call, { p, { Node.new(NodeVariant.Literal, { str.variant, str }) } })
 				else
 					local table = tableconstructor()
 					if table then
@@ -861,11 +861,14 @@ function format(node --[[@param node Node]]) ---@return string
 			return "{\n\t" .. concat(contents, ",\n\t") .. "\n}"
 		end
 	elseif variant == NodeVariant.Literal then
-		if data[1] == TokenVariant.String then ---@cast data { [1]: string, [2]: Token<string> }
+		if data[1] == TokenVariant.String then ---@cast data { [1]: TokenVariant, [2]: Token<string> }
 			return fmt("%q", data[2].data)
+		elseif data[1] == TokenVariant.MString then ---@cast data { [1]: TokenVariant, [2]: Token<{ [1]: string, [2]: integer }> }
+			local part = ("="):rep(data[2].data[2])
+			return fmt("[%s[%s]%s]", part, data[2].data[1], part)
 		elseif data[1] == TokenVariant.Vararg then
 			return "..."
-		else ---@cast data { [1]: string, [2]: Token<string> }
+		else ---@cast data { [1]: TokenVariant, [2]: Token<string> }
 			return tostring(data[2].data)
 		end
 	elseif variant == NodeVariant.Lambda then ---@cast data { [1]: Token<string>[], [2]: Node }
