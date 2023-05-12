@@ -61,6 +61,7 @@ function Playground() {
 				id="editor"
 				onkeydown=${AllowTabs}
 				onkeyup=${e=> setCode(e.target.value)}
+				spellcheck="false"
 				aria-label="Lua code editor"
 			>
 				${DEFAULT_CODE}
@@ -68,6 +69,7 @@ function Playground() {
 
 			<textarea
 				id="output"
+				spellcheck="false"
 				aria-label="Output data, either formatted code, an AST, or a list of Tokens"
 				readonly
 			>
