@@ -5,7 +5,7 @@
 
 --#region tokenizer
 
----@alias Version "Lua 5.1"|"Lua 5.4"|"Lua 5.3"|"Lua 5.2"|"Garry's Mod"|"LuaJIT 2.1"
+---@alias Version "Lua 5.1"|"Lua 5.2"|"Lua 5.3"|"Lua 5.4"|"LuaJIT 2.1"|"Garry's Mod"
 local UTF8_PATTERN = _VERSION == "Lua 5.1" and "^([%z\x01-\x7F\xC2-\xF4][\x80-\xBF]*)" or "^([\0\x01-\x7F\xC2-\xF4][\x80-\xBF]*)" -- utf8.charpattern
 
 ---@generic T
@@ -60,7 +60,7 @@ local Keywords = {
 	["break"] = true
 }
 
-local function tokenize(src --[[@param src string]], version --[[@param version Version]]) ---@return Token[]
+local function tokenize(src --[[@param src string]], version --[[@param version Version?]]) ---@return Token[]
 	version = version or _VERSION
 	local unicode, has_attributes, c_ops, binary_literals = (version == "Garry's Mod" or version >= "LuaJIT 2.1"), version >= "Lua 5.4", version == "Garry's Mod", (version == "Garry's Mod" or version == "LuaJIT 2.1")
 
@@ -119,6 +119,11 @@ local function tokenize(src --[[@param src string]], version --[[@param version 
 			return Token.new(TokenVariant.Binary, tonumber(data, 2))
 		end
 
+		local data = consume("^(%d+e%d+)")
+		if data then
+			return Token.new(TokenVariant.Integer, tonumber(data))
+		end
+
 		local data = consume("^(%d+)")
 		if data then
 			return Token.new(TokenVariant.Integer, tonumber(data))
@@ -138,7 +143,7 @@ local function tokenize(src --[[@param src string]], version --[[@param version 
 				buffer[#buffer + 1] = unicode
 			until ptr >= len
 		else
-			buffer[1] = consume("^([%w_]+)")
+			buffer[1] = consume("^([%a_][%w_]*)")
 		end
 
 		if #buffer > 0 then
@@ -157,14 +162,6 @@ local function tokenize(src --[[@param src string]], version --[[@param version 
 		end
 
 		local data = consume('^\"([^\"]*)\"') -- Todo: Escapes
-		--[[local quot = consume("^(['\"])")
-		if quot then
-			repeat
-				local inner, escapes = consume("^([^\\" .. quot .. "]*)(\\*)" .. quot)
-				print(inner, escapes and #escapes or 0)
-			until ptr >= len
-		end]]
-
 		if data then
 			return Token.new(TokenVariant.String, data)
 		end
@@ -275,7 +272,7 @@ local NodeVariant = {
 
 	Not = 32, Negate = 33, Length = 34,
 
-	Literal = 35, Lambda = 36, Identifier = 37
+	Table = 35, Literal = 36, Lambda = 37, Identifier = 38
 }
 
 Node.Variant = NodeVariant
@@ -327,7 +324,7 @@ local function parse(tokens, version)
 
 	local arguments, parameters, stmt, expr, block, varlist, explist
 	local function prim()
-		for variant in ipairs {
+		for _, variant in ipairs {
 			TokenVariant.Nil, TokenVariant.Boolean,
 			TokenVariant.Integer, TokenVariant.Hexadecimal, TokenVariant.Binary, TokenVariant.Decimal,
 			TokenVariant.String, TokenVariant.Vararg
@@ -386,13 +383,13 @@ local function parse(tokens, version)
 
 	local function tableconstructor() ---@return Node?
 		if consume(TokenVariant.Grammar, "{") then
-			if consume(TokenVariant.Grammar, "}") then return Node.new(NodeVariant.Literal, { "table", {} }) end
+			if consume(TokenVariant.Grammar, "}") then return Node.new(NodeVariant.Table, {}) end
 			local fields = {}
 			repeat
 				fields[#fields + 1] = field()
 				fieldsep()
 			until consume(TokenVariant.Grammar, "}")
-			return Node.new(NodeVariant.Literal, { "table", fields })
+			return Node.new(NodeVariant.Table, fields)
 		end
 	end
 
@@ -446,7 +443,7 @@ local function parse(tokens, version)
 			elseif p and p.variant == NodeVariant.Identifier then
 				local str = consume(TokenVariant.String) or consume(TokenVariant.MString)
 				if str then
-					p = Node.new(NodeVariant.Call, { p, { Node.new(NodeVariant.Literal, { "string", str }) } })
+					p = Node.new(NodeVariant.Call, { p, { Node.new(NodeVariant.Literal, { TokenVariant.String, str }) } })
 				else
 					local table = tableconstructor()
 					if table then
@@ -535,7 +532,7 @@ local function parse(tokens, version)
 				assert(consume(TokenVariant.Grammar, "]"), "Expected ] to end index")
 				chain[i], i = key, i + 1
 			elseif consume(TokenVariant.Grammar, ".") then
-				chain[i], i = Node.new(NodeVariant.Literal, {"string", assert(consume(TokenVariant.Identifier), "Expected identifier for dot index")}), i + 1
+				chain[i], i = Node.new(NodeVariant.Literal, {TokenVariant.String, assert(consume(TokenVariant.Identifier), "Expected identifier for dot index")}), i + 1
 			else
 				break
 			end
@@ -844,28 +841,28 @@ function format(node --[[@param node Node]]) ---@return string
 		return fmt("-%s", format(data))
 	elseif variant == NodeVariant.Length then ---@cast data Node
 		return fmt("#%s", format(data))
-	elseif variant == NodeVariant.Literal then
-		if data[1] == "table" then ---@cast data { [1]: string, [2]: { [1]: Node?, [2]: Node }[] }
-			local contents = map(data[2], function(kv)
-				if kv[1] then
-					if kv[1].variant == NodeVariant.Identifier then
-						return format(kv[1]) .. " = " .. format(kv[2]):gsub("\n", "\n\t")
-					else
-						return "[" .. format(kv[1]) .. "] = " .. format(kv[2]):gsub("\n", "\n\t")
-					end
+	elseif variant == NodeVariant.Table then ---@cast data { [1]: Node?, [2]: Node }[]
+		local contents = map(data, function(kv)
+			if kv[1] then
+				if kv[1].variant == NodeVariant.Identifier then
+					return format(kv[1]) .. " = " .. format(kv[2]):gsub("\n", "\n\t")
 				else
-					return format(kv[2])
+					return "[" .. format(kv[1]) .. "] = " .. format(kv[2]):gsub("\n", "\n\t")
 				end
-			end)
-
-			if #contents < 4 then
-				return "{" .. concat(contents, ", ") .. "}"
 			else
-				return "{\n\t" .. concat(contents, ",\n\t") .. "\n}"
+				return format(kv[2])
 			end
-		elseif data[1] == "string" then ---@cast data { [1]: string, [2]: Token<string> }
+		end)
+
+		if #contents < 4 then
+			return "{" .. concat(contents, ", ") .. "}"
+		else
+			return "{\n\t" .. concat(contents, ",\n\t") .. "\n}"
+		end
+	elseif variant == NodeVariant.Literal then
+		if data[1] == TokenVariant.String then ---@cast data { [1]: string, [2]: Token<string> }
 			return fmt("%q", data[2].data)
-		elseif data[1] == "vararg" then
+		elseif data[1] == TokenVariant.Vararg then
 			return "..."
 		else ---@cast data { [1]: string, [2]: Token<string> }
 			return tostring(data[2].data)
