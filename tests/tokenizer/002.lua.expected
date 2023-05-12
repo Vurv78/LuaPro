@@ -1,0 +1,21 @@
+local lupa = require("src.lib.mod")
+local Token, Variant = lupa.Token, lupa.Token.Variant
+
+return {
+	Token.new(Variant.Keyword, "while"),
+	Token.new(Variant.Keyword, "if"),
+	Token.new(Variant.Keyword, "elseif"),
+	Token.new(Variant.Keyword, "else"),
+	Token.new(Variant.Keyword, "do"),
+	Token.new(Variant.Keyword, "then"),
+	Token.new(Variant.Keyword, "repeat"),
+	Token.new(Variant.Keyword, "local"),
+	Token.new(Variant.Keyword, "function"),
+	Token.new(Variant.Keyword, "return"),
+	Token.new(Variant.Keyword, "goto"),
+	Token.new(Variant.Keyword, "end"),
+	Token.new(Variant.Keyword, "for"),
+	Token.new(Variant.Keyword, "in"),
+	Token.new(Variant.Keyword, "until"),
+	Token.new(Variant.Keyword, "break")
+}

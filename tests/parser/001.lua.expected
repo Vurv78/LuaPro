@@ -1,0 +1,15 @@
+local lupa = require("src.lib.mod")
+local Node, Token = lupa.Node, lupa.Token
+
+return Node.new(Node.Variant.Chunk, {
+	Node.new(Node.Variant.Function,{
+		true,
+		{ { false, Token.new(Token.Variant.Identifier, "test") } },
+		{
+				Token.new(Token.Variant.Identifier, "a"),
+				Token.new(Token.Variant.Identifier, "b"),
+				Token.new(Token.Variant.Identifier, "c")
+			},
+		Node.new(Node.Variant.Chunk, {})
+	})
+})
