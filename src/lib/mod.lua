@@ -504,6 +504,7 @@ local function parse(tokens, version)
 			exprs[#exprs + 1] = assert(expr(), "Expected expression for " .. (msg or "arguments"))
 			if ending and consume(TokenVariant.Grammar, ending) then return exprs end
 		until not consume(TokenVariant.Grammar, ",")
+		assert(not ending or consume(TokenVariant.Grammar, ending), "Expected " .. ending .. " to complete arguments")
 		return exprs
 	end
 
