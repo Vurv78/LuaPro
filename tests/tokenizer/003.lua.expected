@@ -1,0 +1,7 @@
+local lupa = require("src.lib.mod")
+local Token, Variant = lupa.Token, lupa.Token.Variant
+
+return {
+	Token.new(Variant.String, "Hello, \\r world!"),
+	Token.new(Variant.MString, "Hello\nWorld"),
+}

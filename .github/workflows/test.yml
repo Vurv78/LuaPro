@@ -1,16 +1,6 @@
-name: Unit Tests
+name: Run tests
 
-on:
-  push:
-    paths:
-    - 'src/**'
-    - 'test/**'
-  pull_request:
-    paths:
-    - 'src/**'
-    - 'test/**'
-  workflow_dispatch:
-
+on: push, pull_request, workflow_dispatch
 
 jobs:
   test_luajit:
@@ -23,7 +13,7 @@ jobs:
 
     - name: "Run Tests"
       run: |
-        luajit test/main.lua
+        luajit tests/main.lua
 
   test_lua51:
     runs-on: ubuntu-latest
@@ -35,7 +25,7 @@ jobs:
 
     - name: "Run Tests"
       run: |
-        lua test/main.lua
+        lua tests/main.lua
 
   test_lua52:
     runs-on: ubuntu-latest
@@ -47,7 +37,7 @@ jobs:
 
     - name: "Run Tests"
       run: |
-        lua test/main.lua
+        lua tests/main.lua
 
   test_lua53:
     runs-on: ubuntu-latest
@@ -59,4 +49,16 @@ jobs:
 
     - name: "Run Tests"
       run: |
-        lua test/main.lua
+        lua tests/main.lua
+
+  test_lua54:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: "Install lua 5.4"
+      run: |
+        sudo apt install lua5.4
+
+    - name: "Run Tests"
+      run: |
+        lua tests/main.lua

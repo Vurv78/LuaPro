@@ -1,0 +1,17 @@
+local lupa = require("src.lib.mod")
+local Node, Token = lupa.Node, lupa.Token
+
+return Node.new(Node.Variant.Chunk, {
+	Node.new(Node.Variant.LocalAssign, {
+		{
+			Token.new(Token.Variant.Identifier, "a"),
+			Token.new(Token.Variant.Identifier, "b"),
+			Token.new(Token.Variant.Identifier, "c")
+		},
+		{
+			Node.new(Node.Variant.Literal, { Token.Variant.Integer, 12345e23 }),
+			Node.new(Node.Variant.Literal, { Token.Variant.Hexadecimal, 0x231 }),
+			Node.new(Node.Variant.Literal, { Token.Variant.Decimal, 3.72 })
+		}
+	})
+})

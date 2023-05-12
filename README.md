@@ -1,5 +1,5 @@
 # 🧐 LuaPro [![CI Badge](https://github.com/Vurv78/LuaPro/actions/workflows/test.yml/badge.svg)](https://github.com/Vurv78/LuaPro/actions) [![License](https://img.shields.io/github/license/Vurv78/LuaPro?color=red&include_prereleases)](https://github.com/Vurv78/LuaPro/blob/master/LICENSE) [![github/Vurv78](https://img.shields.io/discord/824727565948157963?label=Discord&logo=discord&logoColor=ffffff&labelColor=7289DA&color=2c2f33)](https://discord.gg/yXKMt2XUXm)
-> Lua formatter, deobfuscator, parser, etc
+> Lua AST toolkit for formatting, deobfuscating*, and tweaking code, in pure lua.
 
 ### Turns
 ```lua
@@ -29,12 +29,11 @@ repeat
 	end
 until true
 ```
-__This is actively unit tested to ensure it will deobfuscate properly [see here](test/cases/readme.lua)__
 
 ## Features
-* It's written in pure, optimized lua (parses ~2.5kb of source code in a second) 🌔
-* Formatting Lua 5.1 / LuaJIT code with proper indentation, spacing.
-* `Deobfuscate` mode on top of formatting to reveal complex literals (and will later optimize away garbage code).
-* Supports 5.1, 5.2, 5.3 and LuaJIT (5.4 not tested)*
+- [x] Written in pure version agnostic lua (5.1, 5.2, 5.3, 5.4, JIT) 🌔
+- [x] Relatively fast, parses ~10MB of code in ~3 seconds
+- [x] Formatting Lua 5.1 / LuaJIT code with proper indentation and spacing.
+- [ ] Code deobfuscation with methods such as constant folding and dead code elimination*
 
-\* Note you will need to provide your own bit library polyfills for versions other than 5.2 and luajit
+\* Not yet (re)implemented.

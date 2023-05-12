@@ -1,0 +1,9 @@
+local lupa = require("src.lib.mod")
+local Token, Variant = lupa.Token, lupa.Token.Variant
+
+return {
+	Token.new(Variant.Keyword, "local"),
+	Token.new(Variant.Identifier, "x"),
+	Token.new(Variant.Operator, "="),
+	Token.new(Variant.Integer, 5)
+}
