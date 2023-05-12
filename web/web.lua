@@ -1,32 +1,5 @@
-local paths = {
-	"?.lua",
-	"../?.lua",
-	"../src/?.lua",
-	"../src/codegen/?.lua",
-	"../src/codegen/mode-lua/?.lua",
-	"../src/lexer/?.lua",
-	"../src/parser/?.lua",
-	"../src/structure/?.lua",
-}
-
-package.path = table.concat(paths, ";") .. package.path
-
--- bit polyfill
-require("test/lib")
-
-local Lexer = require("lexer/lua").new()
-local Parser = require("parser/lua").new()
-
-local Transpiler = require("codegen/lua")
-local Formatter = Transpiler.new( require("codegen/mode-lua/format") )
-local Deobfuscator = Transpiler.new( require("codegen/mode-lua/deobfuscate") )
-local Optimizer = Transpiler.new( require("codegen/mode-lua/optimize") )
-
-local Modes = {
-	["Formatter"] = Formatter,
-	["Deobfuscator"] = Deobfuscator,
-	["Optimizer"] = Optimizer
-}
+package.path = "../?.lua;" .. package.path
+local lupa = require("src.lib.mod")
 
 local function sort_values(a, b)
 	if type(a) == "number" and type(b) == "number" then
@@ -93,16 +66,17 @@ local function inspect(object, depth, dumped)
 	end
 end
 
-function Transpile(code, mode)
-	Lexer:reset()
-	Parser:reset()
-
-	local tokens = Lexer:parse(code)
-	local nodes = Parser:parse(tokens)
-
-	if mode == "AST" then
-		return inspect(nodes)
+---@param code string
+---@param mode "Tokens"|"AST"|"Formatter"
+---@param version Version
+function Transpile(code, mode, version)
+	if mode == "Tokens" then
+		return inspect(lupa.tokenize(code, version))
+	elseif mode == "AST" then
+		return inspect(lupa.parse(lupa.tokenize(code, version), version))
+	elseif mode == "Formatter" then
+		return lupa.format(lupa.parse(lupa.tokenize(code, version), version))
 	else
-		return Modes[mode]:process(nodes)
+		return "Unsupported Mode: " .. mode
 	end
 end
