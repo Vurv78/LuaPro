@@ -732,18 +732,17 @@ function format(node --[[@param node Node]]) ---@return string
 	elseif variant == NodeVariant.Comment then ---@cast data string
 		return fmt("-- %s", data)
 	elseif variant == NodeVariant.If then
-		local first = table.remove(data, 1)
-		local first = fmt("if %s then%s", format(first[1]), block(first[2]))
-
-		local buf = map(data, function (chain)
+		local buf = { fmt("if %s then%s", format(data[1][1]), block(data[1][2])) }
+		for i = 2, #data do
+			local chain = data[i]
 			if chain[1] then
-				return fmt("elseif %s then%s", format(chain[1]), block(chain[2]))
+				buf[i] = fmt("elseif %s then%s", format(chain[1]), block(chain[2]))
 			else
-				return "else" .. block(chain[2])
+				buf[i] = "else" .. block(chain[2])
 			end
-		end)
+		end
 
-		return first .. concat(buf) .. "end"
+		return concat(buf) .. "end"
 	elseif variant == NodeVariant.While then ---@cast data { [1]: Node, [2]: Node }
 		return fmt("while %s do%send", format(data[1]), block(data[2]))
 	elseif variant == NodeVariant.For then ---@cast data { [1]: "in"|"=" }
