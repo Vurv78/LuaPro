@@ -104,7 +104,7 @@ local function tokenize(src --[[@param src string]], version --[[@param version 
 			return Token.new(TokenVariant.Comment, consume("^([^\n]+)\n"))
 		end
 
-		local data = consume("^(%d+%.%d+)")
+		local data = consume("^(%d*%.%d+)")
 		if data then
 			return Token.new(TokenVariant.Decimal, tonumber(data))
 		end
