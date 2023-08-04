@@ -1,5 +1,6 @@
 package.path = "../?.lua;" .. package.path
-local lupa = require("src.lib.mod")
+
+local luapro = require "src.luapro"
 
 local function sort_values(a, b)
 	if type(a) == "number" and type(b) == "number" then
@@ -71,11 +72,11 @@ end
 ---@param version Version
 function Transpile(code, mode, version)
 	if mode == "Tokens" then
-		return inspect(lupa.tokenize(code, version))
+		return inspect(luapro.tokenize(code, version))
 	elseif mode == "AST" then
-		return inspect(lupa.parse(lupa.tokenize(code, version), version))
+		return inspect(luapro.parse(luapro.tokenize(code, version), version))
 	elseif mode == "Formatter" then
-		return lupa.format(lupa.parse(lupa.tokenize(code, version), version))
+		return luapro.format(luapro.parse(luapro.tokenize(code, version), version))
 	else
 		return "Unsupported Mode: " .. mode
 	end

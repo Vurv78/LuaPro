@@ -1,8 +1,6 @@
 package.path = package.path .. ";src/?.lua"
 
-local lib = require("src.lib.mod")
-
-local tokenize, parse = lib.tokenize, lib.parse
+local luapro = require("src.luapro")
 
 --- Indented print.
 -- Removes indentation from the given string so you can indent the string source without it affecting the output.
@@ -48,12 +46,12 @@ local Commands = {
 		local output = assert(arg[3], "No output file specified.")
 
 		local file = assert( io.open(input, "rb"), "Could not open input file." )
-		local tokens = tokenize(file:read("*a"))
-		local ast = parse(tokens)
+		local tokens = luapro.tokenize(file:read("*a"))
+		local ast = luapro.parse(tokens)
 		file:close()
 
 		local out = assert( io.open(output, "wb"), "Could not open output file." )
-		out:write(ast:display())
+		out:write(luapro.format(ast))
 
 		print("Formatted " .. input .. " to " .. output)
 	end,
@@ -63,8 +61,8 @@ local Commands = {
 		local output = assert(arg[3], "No output file specified.")
 
 		local file = assert( io.open(input, "rb"), "Could not open input file." )
-		local tokens = tokenize(file:read("*a"))
-		local ast = parse(tokens)
+		local tokens = luapro.tokenize(file:read("*a"))
+		local ast = luapro.parse(tokens)
 
 		file:close()
 
@@ -82,7 +80,7 @@ local Commands = {
 		local output = assert(arg[3], "No output file specified.")
 
 		local file = assert( io.open(input, "rb"), "Could not open input file." )
-		local tokens = tokenize(file:read("*a"))
+		local tokens = luapro.tokenize(file:read("*a"))
 		file:close()
 
 		do
