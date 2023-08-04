@@ -440,7 +440,7 @@ local function parse(tokens, version)
 				local method = assert(consume(TokenVariant.Identifier), "Expected method name after :")
 				assert(consume(TokenVariant.Grammar, "("), "Expected ( to start methodcall arguments")
 				p = Node.new(NodeVariant.MethodCall, { p, method, arguments("method call", ")") })
-			elseif p and p.variant == NodeVariant.Identifier then
+			elseif p then
 				local str = consume(TokenVariant.String) or consume(TokenVariant.MString)
 				if str then
 					p = Node.new(NodeVariant.Call, { p, { Node.new(NodeVariant.Literal, { str.variant, str }) } })
