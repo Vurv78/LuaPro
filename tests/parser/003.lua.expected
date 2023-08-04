@@ -1,4 +1,4 @@
-local lupa = require("src.lib.mod")
+local lupa = require("src.lupa")
 local Node, Token = lupa.Node, lupa.Token
 
 return Node.new(Node.Variant.Chunk, {

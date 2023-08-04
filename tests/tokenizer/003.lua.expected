@@ -1,4 +1,4 @@
-local lupa = require("src.lib.mod")
+local lupa = require("src.lupa")
 local Token, Variant = lupa.Token, lupa.Token.Variant
 
 return {
