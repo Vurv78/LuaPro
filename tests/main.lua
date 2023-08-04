@@ -1,4 +1,4 @@
-local lupa = require("src.lib.mod")
+local luapro = require("src.luapro")
 
 local path_sep = package.config:sub(1, 1)
 local traverse_cmd = path_sep == "\\" and "dir /b " or "ls "
@@ -48,7 +48,7 @@ iterFiles("tests/tokenizer", function(path)
 		assert(io.open("tests/tokenizer/" .. path), "r", "io.open: " .. path),
 		assert(io.open("tests/tokenizer/" .. case .. ".lua.expected"), "missing .expected file for " .. case)
 
-	local tokens = lupa.tokenize(case:read("*a"))
+	local tokens = luapro.tokenize(case:read("*a"))
 	for i, tok in ipairs(tokens) do print(tok) end
 
 	local ok, expected = pcall(loadstring, expected:read("*a"))
@@ -66,12 +66,12 @@ iterFiles("tests/parser", function(path)
 		assert(io.open("tests/parser/" .. path), "r", "io.open: " .. path),
 		assert(io.open("tests/parser/" .. case .. ".lua.expected"), "missing .expected file for " .. case)
 
-	local ast = lupa.parse( lupa.tokenize( case:read("*a") ) )
+	local ast = luapro.parse( luapro.tokenize( case:read("*a") ) )
 	local ok, expected = pcall(loadstring, expected:read("*a"))
 	assert(ok and expected, "Failed to compile expected result")
 	local expected = assert(expected(), "no output from expected file " .. path)
 
-	print(lupa.format(ast))
-	print(lupa.format(expected))
+	print(luapro.format(ast))
+	print(luapro.format(expected))
 	assert(deepEqual(ast, expected), "failed: " .. path)
 end)
